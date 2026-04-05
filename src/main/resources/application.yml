@@ -1,0 +1,46 @@
+spring:
+  application:
+    name: ad-server-engine
+  
+  threads:
+    virtual:
+      enabled: true # 가상 스레드 활성화 (고밀도 I/O 성능 최적화)
+
+  datasource:
+    url: jdbc:mysql://localhost:3306/ad_server?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+    username: root
+    password: root
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        default_batch_fetch_size: 100 # N+1 문제 방지를 위한 벌크 페치 설정
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      acks: all # 전송 신뢰성 보장 (모든 복제본 확인)
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+    consumer:
+      group-id: ad-server-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "*"
+
+logging:
+  level:
+    root: info
+    io.hoony.adserver: debug
