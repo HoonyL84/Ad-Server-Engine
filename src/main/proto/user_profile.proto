@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "io.hoony.adserver.grpc";
+
+// 1. 유저 프로필 조회 서비스 정의
+service UserProfileService {
+  // 특정 유저 정보를 가져오는 기능 (Request -> Response)
+  rpc GetUserProfile(UserRequest) returns (UserResponse);
+}
+
+message UserRequest {
+  string user_id = 1;
+}
+
+message UserResponse {
+  string user_id = 1;
+  string gender = 2;
+  string location_id = 3;
+  repeated string tags = 4;
+}
