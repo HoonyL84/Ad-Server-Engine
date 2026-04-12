@@ -23,11 +23,46 @@
 
 ---
 
+## 🚀 Key Features (Design Preview)
+
+분석된 서비스들의 실전적 전략을 반영한 **Multi-Stage Pipeline** 구조를 채택하였습니다.
+
+- **Hard-Filter Layer**: (무신사 사례 반영) 성별, 연령 등 유저 프로필 기반의 절대적 제약 조건을 시스템 최상단에서 검증하여 도메인 무결성 보호
+- **Path-based Location Matcher**: (당근 사례 반영) 계층형 지역 ID(Neighborhood ID) 체계를 활용하여, 지역 기반의 고속 매칭 수행
+- **Interest-based Matcher**: (오늘의집 사례 반영) 유저의 관심사 및 과거 구매 내역을 바탕으로 최적의 광고 소재를 매칭하는 로직 구현
+
+## 🏗️ Serving Pipeline Architecture (v0.1 초안)
+
+본 엔진은 **한 번의 요청으로 여러 광고 지면(Slot)을 동시에 채워주는** 병렬 처리 깔때기(Parallel Funnel) 구조를 지향합니다.
+
+```mermaid
+graph TD
+    REQ((Request)) --> ANALYZE[User Profile Analysis <br/> 지면 판단]
+    ANALYZE -->|Parallel| L_MATCH[Location Matcher <br/> 지역 광고 지면]
+    ANALYZE -->|Parallel| I_MATCH[Interest Matcher <br/> 관심사 광고 지면]
+    ANALYZE -->|Parallel| H_FILTER[Hard-Filter <br/> 성별/연령 타겟팅]
+    
+    L_MATCH --> L_AUCTION[Auctioneer]
+    I_MATCH --> I_AUCTION[Auctioneer]
+    H_FILTER --> H_AUCTION[Auctioneer]
+    
+    L_AUCTION --> RESP[Response Aggregator <br/> 멀티 슬롯 통합 응답]
+    I_AUCTION --> RESP
+    H_AUCTION --> RESP
+    
+    RESP --> KAFKA{{Kafka Event <br/> 비동기 로그 발행}}
+```
+
+- **Efficiency**: Java 21 **Virtual Threads**를 활용하여 각 지면별 매칭 연산을 초경량 병렬 처리
+- **Low Latency**: 가장 느린 연산 하나만큼의 시간으로 모든 지면(Slot) 광고를 즉각 서빙
+
+---
+
 ## 📂 기술 블로그 시리즈 (Design Rationale)
 
 - **Vol 1.** [#1. 서비스 분석 (Patterns)](file:///c:/Users/hoony/IdeaProjects/ad-server-engine/vol1_analysis_patterns.md) ([Velog](https://velog.io/@hoonyl/1.-%EB%8B%BC%EA%B7%BC-%EB%AC%B4%EC%8B%A0%EC%82%AC-%EC%98%A4%EB%8A%98%EC%9D%98%EC%A7%91-%EA%B4%91%EA%B3%A0%EB%A5%BC-%EC%A7%81%EC%A0%91-%EB%B6%84%EC%84%9D%ED%95%98%EB%A9%B0-%EC%84%A4%EA%B3%84%EC%9D%98-%EA%B7%BC%EA%B1%B0%EB%A5%BC-%EC%B0%BE%EB%8B%A4))
 - **Vol 2-1.** [#2-1. 데이터 모델링 (Data Modeling)](file:///c:/Users/hoony/IdeaProjects/ad-server-engine/vol2_1_data_modeling.md) ([Velog](https://velog.io/@hoonyl/2-1.-%EA%B3%A0%EC%84%B1%EB%8A%A5-%EC%84%9C%EB%B9%84%EC%8A%A4-%EC%9C%84%ED%95%9C-%EB%8D%B0%EC%9D%B4%ED%84%B0-%EB%AA%A8%EB%8D%B8%EB%A7%81))
-- **Vol 2-2.** [#2-2. 실행 구조 (Serving Structure)](file:///c:/Users/hoony/IdeaProjects/ad-server-engine/vol2_2_serving_structure.md) ([Velog](https://velog.io/@hoonyl/2-2.-%EC%84%9C%EB%B9%84-%EC%86%8D%EB%8F%84%EB%A5%BC-%EB%81%8C%EC%96%B4%EC%98%AC%EB%A6%AC%EB%8A%94-%EC%8B%A4%ED%96%89-%EA%B5%AC%EC%A1%B0))
+- **Vol 2-2.** [#2-2. 실행 구조 (Serving Structure)](file:///c:/Users/hoony/IdeaProjects/ad-server-engine/vol2_2_serving_structure.md) ([Velog](https://velog.io/@hoonyl/2-2.-%EC%84%9C%EB%B9%94-%EC%86%8D%EB%8F%84%EB%A5%BC-%EB%81%8C%EC%96%B4%EC%98%AC%EB%A6%AC%EB%8A%94-%EC%8B%A4%ED%96%89-%EA%B5%AC%EC%A1%B0))
 - **Vol 3.** [#3. 최적화의 본질 (Optimization)](file:///c:/Users/hoony/IdeaProjects/ad-server-engine/vol3_optimization.md) ([Velog](https://velog.io/@hoonyl/3.-%EA%B4%91%EA%B3%A0-%EC%97%94%EC%A7%84-%EC%B5%9C%EC%A0%81%ED%99%94%EC%9D%98-%EB%B3%B8%EC%A7%88))
 
 ---
