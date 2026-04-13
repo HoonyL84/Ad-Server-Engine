@@ -5,12 +5,17 @@ import io.hoony.adserver.domain.advertiser.AdvertiserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
@@ -23,10 +28,8 @@ import java.util.concurrent.ThreadLocalRandom;
 @RequiredArgsConstructor
 public class AdDataSeeder implements CommandLineRunner {
 
-    private final AdRepository adRepository;
     private final AdvertiserRepository advertiserRepository;
-    private final org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
-    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+    private final JdbcTemplate jdbcTemplate;
 
     private static final int TOTAL_ADS = 300;
 
@@ -36,7 +39,7 @@ public class AdDataSeeder implements CommandLineRunner {
 
     @Override
     @Transactional
-    public void run(String... args) {
+    public void run(@SuppressWarnings("unused") String... args) {
         log.info("마스터급 고성능 벌크 시딩(목표: {}건)을 시작합니다...", TOTAL_ADS);
         
         // 1. 멱등성 보장을 위한 초기화 (JDBC 기반)
