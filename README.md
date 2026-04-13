@@ -19,7 +19,8 @@
 ### 3. Domain Readiness (Step 3)
 - **2-Tier Modeling**: 서빙 시점의 Join 제거를 위한 Advertiser-Ad 2계층 구조 확립
 - **Hybrid Targeting**: 성별, 지역(계층형 ID), 관심사별 고속 필터링을 위한 스키마 설계
-- **Development Seeding**: 실전 엔진 개발을 위한 300건 이상의 페르소나 데이터 자동 적재 환경 완비
+- **Development Seeding**: 실전 엔진 개발을 위한 3,000건 이상의 고밀도 광고 데이터 적재 환경 완비
+- **Mock DMP Infrastructure**: gRPC 기반 유저 프로필 조회 시뮬레이션을 위한 100,000명의 유저 페르소나 구축 (Redis Pipelining 최적화)
 
 ---
 

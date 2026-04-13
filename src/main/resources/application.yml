@@ -2,6 +2,10 @@ spring:
   application:
     name: ad-server-engine
   
+  sql:
+    init:
+      mode: always # MySQL에서도 data.sql을 강제로 실행
+  
   threads:
     virtual:
       enabled: true # 가상 스레드 활성화 (고성능 병렬 서빙의 핵심)
@@ -20,6 +24,7 @@ spring:
       hibernate:
         format_sql: true
         default_batch_fetch_size: 100 # N+1 문제 방지 (시니어 표준)
+    defer-datasource-initialization: true # Hibernate가 테이블을 만든 후 data.sql 실행
 
   elasticsearch:
     uris: http://localhost:9200

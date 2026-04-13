@@ -28,10 +28,11 @@ import java.util.concurrent.ThreadLocalRandom;
 @RequiredArgsConstructor
 public class AdDataSeeder implements CommandLineRunner {
 
+    private final AdRepository adRepository;
     private final AdvertiserRepository advertiserRepository;
     private final JdbcTemplate jdbcTemplate;
 
-    private static final int TOTAL_ADS = 300;
+    private static final int TOTAL_ADS = 3000;
 
     private enum PersonaType {
         FASHION, LOCAL, HOME, GENERAL
@@ -40,10 +41,13 @@ public class AdDataSeeder implements CommandLineRunner {
     @Override
     @Transactional
     public void run(@SuppressWarnings("unused") String... args) {
+        // 1. 이미 데이터가 충분하다면 시딩 건너뜀 (MySQL 보존)
+        if (adRepository.count() >= TOTAL_ADS) {
+            log.info("이미 {}건 이상의 광고 데이터가 존재합니다. 시딩을 건너뜁니다.", TOTAL_ADS);
+            return;
+        }
+
         log.info("마스터급 고성능 벌크 시딩(목표: {}건)을 시작합니다...", TOTAL_ADS);
-        
-        // 1. 멱등성 보장을 위한 초기화 (JDBC 기반)
-        jdbcTemplate.update("DELETE FROM ad");
         
         List<Advertiser> advertisers = advertiserRepository.findAll();
         if (advertisers.isEmpty()) {
@@ -81,11 +85,11 @@ public class AdDataSeeder implements CommandLineRunner {
             BigDecimal maxBid;
             int distributionRand = random.nextInt(100);
             if (distributionRand < 10) { 
-                maxBid = BigDecimal.valueOf(random.nextInt(1001) + 4000); // 상위 10%: High Bid
+                maxBid = BigDecimal.valueOf(random.nextLong(1001) + 4000); // 상위 10%: High Bid
             } else if (distributionRand < 70) { 
-                maxBid = BigDecimal.valueOf(random.nextInt(2001) + 1000); // 중간 60%: Normal
+                maxBid = BigDecimal.valueOf(random.nextLong(2001) + 1000); // 중간 60%: Normal
             } else { 
-                maxBid = BigDecimal.valueOf(random.nextInt(401) + 100);   // 하위 30%: Low Bid
+                maxBid = BigDecimal.valueOf(random.nextLong(401) + 100);   // 하위 30%: Low Bid
             }
 
             // 4. 관심사 태그 (Interest)
@@ -105,14 +109,14 @@ public class AdDataSeeder implements CommandLineRunner {
                 gender = random.nextBoolean() ? "F" : "M";
             } else if (persona == PersonaType.LOCAL) {
                 // 특정 지역(1:11) 밀집도 60% 시뮬레이션
-                location = random.nextInt(100) < 60 ? "1:11" : Arrays.asList("1:12", "1:13", "1:14", "2:21", "2:22", "3:31", "4:41", "5:51", "9:99", "0").get(random.nextInt(10));
+                location = random.nextInt(100) < 60 ? "1:11" : Arrays.asList("1:12", "1:13", "1:14", "2:21", "2:22", "3:31", "4:41", "5:51", "9:99", "0").get(random.nextInt(11));
             } else {
                 gender = Arrays.asList("M", "F", "ALL").get(random.nextInt(3));
                 location = Arrays.asList("1:11", "1:12", "1:13", "1:14", "2:21", "2:22", "3:31", "4:41", "5:51", "9:99", "0").get(random.nextInt(11));
             }
 
             // 6. 예산 시나리오
-            BigDecimal totalBudget = BigDecimal.valueOf((random.nextInt(100) + 1) * 100000);
+            BigDecimal totalBudget = BigDecimal.valueOf((random.nextLong(100) + 1) * 100000);
             BigDecimal spentAmount = random.nextInt(100) < 5 ? totalBudget.subtract(BigDecimal.valueOf(random.nextInt(100))) : totalBudget.multiply(BigDecimal.valueOf(random.nextDouble() * 0.3));
 
             batchArgs.add(new Object[]{
