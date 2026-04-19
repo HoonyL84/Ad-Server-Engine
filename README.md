@@ -32,6 +32,11 @@
 - **Development Seeding**: 실전 엔진 개발을 위한 3,000건 이상의 고밀도 광고 데이터 적재 환경 완비
 - **Mock DMP Infrastructure**: gRPC 기반 유저 프로필 조회 시뮬레이션을 위한 100,000명의 유저 페르소나 구축 (Redis Pipelining 최적화)
 
+#### 4. Search Synchronization (Step 4)
+- **AdDocument Mapping**: Elasticsearch 전용 문서 모델과 검색 리포지토리 정의
+- **Event-driven Indexing**: 광고 생성 트랜잭션 커밋 이후 ES 비동기 색인 처리
+- **Bulk Sync API**: 초기 정합성 확보를 위한 MySQL→Elasticsearch 일괄 동기화 API 제공
+
 ---
 
 ## 🚀 Key Features (Design Preview)
@@ -55,7 +60,7 @@
 
 ## 🛠 Tech Stack
 
-- **Lanuage/Framework**: Java 21 (Virtual Threads), Spring Boot 3.4.0
+- **Language/Framework**: Java 21 (Virtual Threads), Spring Boot 3.4.0
 - **Database**: MySQL 8.0, Redis (Pipelining, Lua Script)
 - **Search Engine**: Elasticsearch 8.15.0
 - **Communication**: gRPC (Protobuf 3)
