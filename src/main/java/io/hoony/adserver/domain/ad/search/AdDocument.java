@@ -37,6 +37,12 @@ public class AdDocument {
     @Field(type = FieldType.Text, analyzer = "standard") // 광고 제목은 키워드 기반 검색을 위해 분석 가능하게 설정
     private String title;
 
+    @Field(type = FieldType.Keyword)
+    private String imageUrl;
+
+    @Field(type = FieldType.Keyword)
+    private String clickUrl;
+
     @Field(type = FieldType.Double)
     private BigDecimal maxBid; // 랭킹 정렬을 위한 입찰가
 

@@ -3,6 +3,7 @@ package io.hoony.adserver.domain.ad.search;
 import org.springframework.data.elasticsearch.repository.ElasticsearchRepository;
 import org.springframework.stereotype.Repository;
 
+import io.hoony.adserver.domain.ad.AdStatus;
 import java.util.List;
 
 /**
@@ -19,5 +20,7 @@ public interface AdSearchRepository extends ElasticsearchRepository<AdDocument, 
      * 실제 서빙 시에는 Query DSL을 사용하여 더 복잡한 '조합 쿼리'를 구현할 예정입니다.
      */
     List<AdDocument> findByTargetGenderAndTargetLocationIdAndStatus(String gender, String locationId, String status);
+
+    List<AdDocument> findByStatus(AdStatus status);
 
 }

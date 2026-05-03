@@ -1,14 +1,14 @@
 spring:
   application:
     name: ad-server-engine
-  
+
   sql:
     init:
-      mode: always # MySQL에서도 data.sql을 강제로 실행
-  
+      mode: never
+
   threads:
     virtual:
-      enabled: true # 가상 스레드 활성화 (고성능 병렬 서빙의 핵심)
+      enabled: true
 
   datasource:
     url: jdbc:mysql://localhost:3306/ad_server?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
@@ -23,12 +23,11 @@ spring:
     properties:
       hibernate:
         format_sql: true
-        default_batch_fetch_size: 100 # N+1 문제 방지 (시니어 표준)
-    defer-datasource-initialization: true # Hibernate가 테이블을 만든 후 data.sql 실행
+        default_batch_fetch_size: 100
+    defer-datasource-initialization: true
 
   elasticsearch:
     uris: http://localhost:9200
-    # 오늘의집 맥락 정보 매칭 엔진 연결 설정
 
   data:
     redis:
@@ -47,10 +46,13 @@ spring:
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
 
-# 광고 서버 전용 환경 설정
 ad-server:
   grpc:
-    port: 9090 # 당근 스타일의 초저지연 내부 통신 포트
+    port: 9090
+  dmp:
+    failure-injection:
+      enabled: false
+      slow-delay-ms: 200
 
 logging:
   level:

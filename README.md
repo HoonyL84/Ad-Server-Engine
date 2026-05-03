@@ -1,16 +1,17 @@
-# Ad Server Engine: High-Performance Speculative Serving
+# Ad Server Engine
 
-17년간 광고 플랫폼을 운영하며 축적된 도메인 노하우를 바탕으로, **"대규모 트래픽 하에서의 초저지연 실시간 타게팅"** 아키텍처를 현대적으로 구현하고 그 기술적 완성도를 실전적으로 증명하기 위한 프로젝트입니다. 
+트래픽 증가 상황에서 광고 응답 지연과 외부 의존성 문제를 줄이기 위해,  
+실시간 광고 서빙 구조를 설계하고 구현하는 프로젝트입니다.
 
 ---
 
 ## 🎯 Why This Project?
 
-본 프로젝트는 실무에서 직면하는 고난도 기술적 과제들을 최신 아키텍처로 재해석하고 최적화하는 과정을 기록합니다.
+본 프로젝트는 광고 서빙 과정에서 발생할 수 있는 지연과 장애 전파를 줄이는 과정을 기록합니다.
 
-- **설계의 근거 (The Rationale)**: 모든 구현 단계에서 "왜 이 기술인가?"에 대한 설계 근거와 사고 과정을 기록으로 남깁니다.
-- **실전 패턴의 이식**: 당근, 무신사, 오늘의집 등 국내 주요 서빙 플랫폼의 아키텍처 패턴을 분석하여 실전 수준의 구조를 설계했습니다.
-- **High-Performance Scalability**: Java 21 Virtual Threads, gRPC, Elasticsearch 등 최신 스택을 활용하여 극한의 성능을 추구합니다.
+- 외부 의존성(DMP) 지연이 전체 광고 응답 지연으로 이어지는 문제를 해결합니다.
+- 개인화 정확도보다 응답 안정성을 우선하는 서빙 전략을 검증합니다.
+- fallback 기반의 안정적인 광고 서빙 구조를 설계하고 구현합니다.
 
 ---
 
@@ -29,23 +30,28 @@
 #### 3. Domain Readiness (Step 3)
 - **2-Tier Modeling**: 서빙 시점의 Join 제거를 위한 Advertiser-Ad 2계층 구조 확립
 - **Hybrid Targeting**: 성별, 지역(계층형 ID), 관심사별 고속 필터링을 위한 스키마 설계
-- **Development Seeding**: 실전 엔진 개발을 위한 3,000건 이상의 고밀도 광고 데이터 적재 환경 완비
-- **Mock DMP Infrastructure**: gRPC 기반 유저 프로필 조회 시뮬레이션을 위한 100,000명의 유저 페르소나 구축 (Redis Pipelining 최적화)
+- **Development Seeding**: 로컬 검증을 위한 3,000건 이상의 광고 데이터 적재 환경 구성
+- **Mock DMP Infrastructure**: 유저 프로필 조회 시뮬레이션을 위한 100,000명의 유저 데이터 구성
 
 #### 4. Search Synchronization (Step 4)
 - **AdDocument Mapping**: Elasticsearch 전용 문서 모델과 검색 리포지토리 정의
 - **Event-driven Indexing**: 광고 생성 트랜잭션 커밋 이후 ES 비동기 색인 처리
 - **Bulk Sync API**: 초기 정합성 확보를 위한 MySQL→Elasticsearch 일괄 동기화 API 제공
 
+#### 5. Serving Orchestration (Step 5)
+- **Parallel Lookup**: DMP 유저 프로필 조회와 Elasticsearch 광고 후보 조회를 Virtual Thread 기반으로 병렬 실행
+- **DMP Timeout & Fallback**: 유저 프로필 조회에 기본 30ms 타임아웃을 두고, 초과/실패 시 광고 후보 기반 fallback 응답 제공
+- **Fallback Reason 분리**: `PROFILE_NOT_FOUND`, `DMP_TIMEOUT`, `TARGET_NOT_MATCHED`, `NO_CANDIDATE` 등으로 장애와 데이터 부족 상황을 구분
+- **Target Filtering**: 성별, 지역, 관심사 기준으로 1차 후보군 필터링 수행
+
 ---
 
-## 🚀 Key Features (Design Preview)
+## 🚀 Key Features
 
-분석된 서비스들의 실전적 전략을 반영한 **Multi-Stage Pipeline** 구조를 채택하였습니다.
-
-- **Hard-Filter Layer**: (무신사 사례 반영) 성별, 연령 등 유저 프로필 기반의 절대적 제약 조건을 시스템 최상단에서 검증하여 도메인 무결성 보호
-- **Path-based Location Matcher**: (당근 사례 반영) 계층형 지역 ID(Neighborhood ID) 체계를 활용하여, 지역 기반의 고속 매칭 수행
-- **Interest-based Matcher**: (오늘의집 사례 반영) 유저의 관심사 및 과거 구매 내역을 바탕으로 최적의 광고 소재를 매칭하는 로직 구현
+- **Parallel Serving**: 유저 프로필과 광고 후보를 병렬 조회하여 응답 지연 최소화
+- **Timeout & Fallback**: DMP 30ms 타임아웃 기반 fallback 서빙
+- **Failure Classification**: fallback reason으로 장애와 데이터 미스 구분
+- **Multi-stage Filtering**: 성별, 지역, 관심사 기반 단계별 후보 필터링
 
 ---
 
@@ -55,13 +61,15 @@
 - **Vol 2-1.** [#2-1. 데이터 모델링 (Data Modeling)](https://velog.io/@hoonyl/2-1.-%EA%B3%A0%EC%84%B1%EB%8A%A5-%EC%84%9C%EB%B9%94-%EC%9C%84%ED%95%9C-%EB%8D%B0%EC%9D%B4%ED%84%B0-%EB%AA%A8%EB%8D%B8%EB%A7%81)
 - **Vol 2-2.** [#2-2. 실행 구조 (Serving Structure)](https://velog.io/@hoonyl/2-2.-%EC%84%9C%EB%B9%99-%EC%86%8D%EB%8F%84%EB%A5%BC-%EB%81%8C%EC%96%B4%EC%98%AC%EB%A6%AC%EB%8A%94-%EC%8B%A4%ED%96%89-%EA%B5%AC%EC%A1%B0)
 - **Vol 3.** [#3. 최적화의 본질 (Optimization)](https://velog.io/@hoonyl/3.-%EA%B4%91%EA%B3%A0-%EC%97%94%EC%A7%84-%EC%B5%9C%EC%A0%81%ED%99%94%EC%9D%98-%EB%B3%B8%EC%A7%88)
+- **Vol 4.** [#4. MySQL과 Elasticsearch를 안전하게 동기화하기](https://velog.io/@hoonyl/4.-MySQL%EA%B3%BC-Elasticsearch%EB%A5%BC-%EC%95%88%EC%A0%84%ED%95%98%EA%B2%8C-%EB%8F%99%EA%B8%B0%ED%99%94%ED%95%98%EA%B8%B0)
+- **Vol 5.** [#5. 멈추지 않는 광고 서빙 흐름 만들기](https://velog.io/@hoonyl/5.-%EB%A9%88%EC%B6%94%EC%A7%80-%EC%95%8A%EB%8A%94-%EA%B4%91%EA%B3%A0-%EC%84%9C%EB%B9%99-%ED%9D%90%EB%A6%84-%EB%A7%8C%EB%93%A4%EA%B8%B0)
 
 ---
 
 ## 🛠 Tech Stack
 
-- **Language/Framework**: Java 21 (Virtual Threads), Spring Boot 3.4.0
-- **Database**: MySQL 8.0, Redis (Pipelining, Lua Script)
+- **Language/Framework**: Java 21, Spring Boot 3.4.0
+- **Database**: MySQL 8.0, Redis
 - **Search Engine**: Elasticsearch 8.15.0
 - **Communication**: gRPC (Protobuf 3)
-- **Tools**: Gradle, Docker Compose, QueryDSL, Testcontainers
+- **Tools**: Gradle, Docker Compose

@@ -40,6 +40,8 @@ public class AdSearchEventListener {
                     .id(ad.getId())
                     .advertiserId(ad.getAdvertiser().getId())
                     .title(ad.getTitle())
+                    .imageUrl(ad.getImageUrl())
+                    .clickUrl(ad.getClickUrl())
                     .maxBid(ad.getMaxBid())
                     .status(ad.getStatus())
                     .targetGender(ad.getTargetGender())

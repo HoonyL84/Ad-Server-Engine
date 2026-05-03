@@ -5,6 +5,7 @@ import io.hoony.adserver.domain.advertiser.AdvertiserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -12,27 +13,38 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 
-/**
- * [Master Insight] 현실적인 비즈니스 데이터 시뮬레이션
- * 단순히 데이터를 넣는 행위를 넘어, 버티컬 플랫폼(패션, 로컬, 홈)의 
- * 지면 특성과 사용자 페르소나를 데이터 분포(Bias)로 재현합니다.
- */
 @Slf4j
 @Component
+@ConditionalOnProperty(name = "ad-server.seed.enabled", havingValue = "true", matchIfMissing = true)
 @RequiredArgsConstructor
 public class AdDataSeeder implements CommandLineRunner {
+
+    private static final int TOTAL_ADS = 3000;
+    private static final int BATCH_SIZE = 1000;
+
+    private static final List<String> LOCATION_POOL = List.of(
+            "1:11", "1:12", "1:13", "1:14", "2:21", "2:22", "3:31", "4:41", "5:51", "9:99", "0"
+    );
+
+    private static final List<String> GENDER_POOL = List.of("M", "F", "ALL");
+    private static final List<String> GENERAL_TAGS = List.of(
+            "finance", "game", "car", "health", "book", "movie", "music", "coin", "pet", "food"
+    );
+
+    private static final Map<PersonaType, List<String>> PERSONA_TAGS = Map.of(
+            PersonaType.FASHION, List.of("fashion", "beauty", "shoes", "sports", "accessory"),
+            PersonaType.LOCAL, List.of("local", "used", "part-time", "restaurant", "pet"),
+            PersonaType.HOME, List.of("furniture", "interior", "living", "lighting", "camping")
+    );
 
     private final AdRepository adRepository;
     private final AdvertiserRepository advertiserRepository;
     private final JdbcTemplate jdbcTemplate;
-
-    private static final int TOTAL_ADS = 3000;
 
     private enum PersonaType {
         FASHION, LOCAL, HOME, GENERAL
@@ -41,93 +53,54 @@ public class AdDataSeeder implements CommandLineRunner {
     @Override
     @Transactional
     public void run(@SuppressWarnings("unused") String... args) {
-        // 1. 이미 데이터가 충분하다면 시딩 건너뜀 (MySQL 보존)
         if (adRepository.count() >= TOTAL_ADS) {
-            log.info("이미 {}건 이상의 광고 데이터가 존재합니다. 시딩을 건너뜁니다.", TOTAL_ADS);
+            log.info("Ad seed skipped. already has {} or more ads.", TOTAL_ADS);
             return;
         }
 
-        log.info("마스터급 고성능 벌크 시딩(목표: {}건)을 시작합니다...", TOTAL_ADS);
-        
         List<Advertiser> advertisers = advertiserRepository.findAll();
         if (advertisers.isEmpty()) {
-            log.warn("광고주 데이터 누락. 시딩 중단.");
+            log.warn("Ad seed skipped. no advertisers found.");
             return;
         }
 
-        // 2. 타입 안전한 페르소나 매핑 (운영 안정성 확보)
-        Map<String, PersonaType> advertiserPersonaMap = Map.of(
-            "패션 브랜드", PersonaType.FASHION,
-            "로컬 상점", PersonaType.LOCAL,
-            "홈 스타일러스", PersonaType.HOME
-        );
+        log.info("Starting ad seed. targetCount={}", TOTAL_ADS);
 
-        Map<PersonaType, List<String>> personaTags = Map.of(
-            PersonaType.FASHION, Arrays.asList("패션", "뷰티", "신발", "운동", "액세서리"),
-            PersonaType.LOCAL, Arrays.asList("로컬", "중고", "알바", "맛집", "반려동물"),
-            PersonaType.HOME, Arrays.asList("가구", "인테리어", "리빙", "조명", "캠핑")
-        );
+        String sql = """
+                INSERT INTO ad
+                (advertiser_id, title, image_url, click_url, max_bid, total_budget, spent_amount, start_date, status,
+                 target_gender, target_location_id, target_interest_tags, target_context, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """;
 
-        List<String> generalTags = Arrays.asList("금융", "게임", "자동차", "건강", "육아", "영화", "독서", "음악", "코인", "재테크");
-        String sql = "INSERT INTO ad (advertiser_id, title, image_url, click_url, max_bid, total_budget, spent_amount, start_date, status, target_gender, target_location_id, target_interest_tags, target_context, created_at, modified_at) " +
-                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-
-        List<Object[]> batchArgs = new ArrayList<>();
-        int batchSize = 1000;
-        ThreadLocalRandom random = ThreadLocalRandom.current(); 
+        ThreadLocalRandom random = ThreadLocalRandom.current();
         LocalDateTime now = LocalDateTime.now();
+        List<Object[]> batchArgs = new ArrayList<>(BATCH_SIZE);
 
         for (int i = 1; i <= TOTAL_ADS; i++) {
             Advertiser advertiser = advertisers.get(random.nextInt(advertisers.size()));
-            PersonaType persona = advertiserPersonaMap.getOrDefault(advertiser.getName(), PersonaType.GENERAL);
-            
-            // 3. 의도된 입찰가 분포 (Ranking Test용 포인트)
-            BigDecimal maxBid;
-            int distributionRand = random.nextInt(100);
-            if (distributionRand < 10) { 
-                maxBid = BigDecimal.valueOf(random.nextLong(1001) + 4000); // 상위 10%: High Bid
-            } else if (distributionRand < 70) { 
-                maxBid = BigDecimal.valueOf(random.nextLong(2001) + 1000); // 중간 60%: Normal
-            } else { 
-                maxBid = BigDecimal.valueOf(random.nextLong(401) + 100);   // 하위 30%: Low Bid
-            }
-
-            // 4. 관심사 태그 (Interest)
-            List<String> tags = new ArrayList<>();
-            List<String> preferredTags = personaTags.getOrDefault(persona, generalTags);
-            int tagCount = random.nextInt(3) + 1;
-            for (int j = 0; j < tagCount; j++) {
-                tags.add(random.nextInt(100) < 85 ? preferredTags.get(random.nextInt(preferredTags.size())) : generalTags.get(random.nextInt(generalTags.size())));
-            }
-            String finalTags = String.join(",", new HashSet<>(tags));
-
-            // 5. 타입별 타겟팅 바이어스 (Gender, Region)
-            String gender = "ALL";
-            String location = "0";
-
-            if (persona == PersonaType.FASHION) {
-                gender = random.nextBoolean() ? "F" : "M";
-            } else if (persona == PersonaType.LOCAL) {
-                // 특정 지역(1:11) 밀집도 60% 시뮬레이션
-                location = random.nextInt(100) < 60 ? "1:11" : Arrays.asList("1:12", "1:13", "1:14", "2:21", "2:22", "3:31", "4:41", "5:51", "9:99", "0").get(random.nextInt(11));
-            } else {
-                gender = Arrays.asList("M", "F", "ALL").get(random.nextInt(3));
-                location = Arrays.asList("1:11", "1:12", "1:13", "1:14", "2:21", "2:22", "3:31", "4:41", "5:51", "9:99", "0").get(random.nextInt(11));
-            }
-
-            // 6. 예산 시나리오
-            BigDecimal totalBudget = BigDecimal.valueOf((random.nextLong(100) + 1) * 100000);
-            BigDecimal spentAmount = random.nextInt(100) < 5 ? totalBudget.subtract(BigDecimal.valueOf(random.nextInt(100))) : totalBudget.multiply(BigDecimal.valueOf(random.nextDouble() * 0.3));
+            PersonaType persona = personaOf(advertiser);
+            BigDecimal totalBudget = randomTotalBudget(random);
 
             batchArgs.add(new Object[]{
-                advertiser.getId(), "[" + advertiser.getName() + "] 전략 광고 " + i,
-                "https://cdn.ad-server.io/img/" + advertiser.getId() + "/" + i + ".jpg",
-                "https://ad-server.io/click/" + i, maxBid, totalBudget, spentAmount,
-                now.minusDays(random.nextInt(10)), "ACTIVE",
-                gender, location, finalTags, "{}", now, now
+                    advertiser.getId(),
+                    "[" + advertiser.getName() + "] strategy ad " + i,
+                    "https://cdn.ad-server.io/img/" + advertiser.getId() + "/" + i + ".jpg",
+                    "https://ad-server.io/click/" + i,
+                    randomBid(random),
+                    totalBudget,
+                    randomSpentAmount(random, totalBudget),
+                    now.minusDays(random.nextInt(10)),
+                    "ACTIVE",
+                    randomGender(random, persona),
+                    randomLocation(random, persona),
+                    randomTags(random, persona),
+                    "{}",
+                    now,
+                    now
             });
 
-            if (batchArgs.size() >= batchSize) {
+            if (batchArgs.size() >= BATCH_SIZE) {
                 jdbcTemplate.batchUpdate(sql, batchArgs);
                 batchArgs.clear();
             }
@@ -136,7 +109,70 @@ public class AdDataSeeder implements CommandLineRunner {
         if (!batchArgs.isEmpty()) {
             jdbcTemplate.batchUpdate(sql, batchArgs);
         }
-        
-        log.info("총 {}개의 [타입 안전한 페르소나] 광고 데이터가 완벽하게 인덱싱되었습니다.", TOTAL_ADS);
+
+        log.info("Ad seed completed. targetCount={}", TOTAL_ADS);
+    }
+
+    private PersonaType personaOf(Advertiser advertiser) {
+        String name = advertiser.getName();
+        if (name.contains("패션")) {
+            return PersonaType.FASHION;
+        }
+        if (name.contains("로컬")) {
+            return PersonaType.LOCAL;
+        }
+        if (name.contains("홈")) {
+            return PersonaType.HOME;
+        }
+        return PersonaType.GENERAL;
+    }
+
+    private BigDecimal randomBid(ThreadLocalRandom random) {
+        int range = random.nextInt(100);
+        if (range < 10) {
+            return BigDecimal.valueOf(random.nextLong(1001) + 4000);
+        }
+        if (range < 70) {
+            return BigDecimal.valueOf(random.nextLong(2001) + 1000);
+        }
+        return BigDecimal.valueOf(random.nextLong(401) + 100);
+    }
+
+    private BigDecimal randomTotalBudget(ThreadLocalRandom random) {
+        return BigDecimal.valueOf((random.nextLong(100) + 1) * 100000);
+    }
+
+    private BigDecimal randomSpentAmount(ThreadLocalRandom random, BigDecimal totalBudget) {
+        if (random.nextInt(100) < 5) {
+            return totalBudget.subtract(BigDecimal.valueOf(random.nextInt(100)));
+        }
+        return totalBudget.multiply(BigDecimal.valueOf(random.nextDouble() * 0.3));
+    }
+
+    private String randomGender(ThreadLocalRandom random, PersonaType persona) {
+        if (persona == PersonaType.FASHION) {
+            return random.nextBoolean() ? "F" : "M";
+        }
+        return GENDER_POOL.get(random.nextInt(GENDER_POOL.size()));
+    }
+
+    private String randomLocation(ThreadLocalRandom random, PersonaType persona) {
+        if (persona == PersonaType.LOCAL) {
+            return random.nextInt(100) < 60 ? "1:11" : LOCATION_POOL.get(random.nextInt(LOCATION_POOL.size()));
+        }
+        return LOCATION_POOL.get(random.nextInt(LOCATION_POOL.size()));
+    }
+
+    private String randomTags(ThreadLocalRandom random, PersonaType persona) {
+        List<String> preferredTags = PERSONA_TAGS.getOrDefault(persona, GENERAL_TAGS);
+        List<String> tags = new ArrayList<>();
+        int tagCount = random.nextInt(3) + 1;
+
+        for (int i = 0; i < tagCount; i++) {
+            List<String> source = random.nextInt(100) < 85 ? preferredTags : GENERAL_TAGS;
+            tags.add(source.get(random.nextInt(source.size())));
+        }
+
+        return String.join(",", new HashSet<>(tags));
     }
 }
