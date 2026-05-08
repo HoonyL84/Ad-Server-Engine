@@ -44,14 +44,22 @@
 - **Fallback Reason 분리**: `PROFILE_NOT_FOUND`, `DMP_TIMEOUT`, `TARGET_NOT_MATCHED`, `NO_CANDIDATE` 등으로 장애와 데이터 부족 상황을 구분
 - **Target Filtering**: 성별, 지역, 관심사 기준으로 1차 후보군 필터링 수행
 
+#### 6. Matching & Ranking Boundary (Step 6)
+- **L1 Candidate Search**: Elasticsearch 서버 사이드 `sort + limit`으로 ACTIVE 광고 후보를 최대 200개까지 조회
+- **L2 Target Matching**: `AdMatcher`로 성별, 지역, 관심사 매칭 책임 분리
+- **Ranking Boundary**: `AdRanker`로 최종 선택 책임을 분리하고, 현재는 기본 `maxBid` 기준으로 선택
+- **Fallback Expansion**: `CANDIDATE_TIMEOUT`, `CANDIDATE_ERROR` 추가로 후보 조회 실패 원인 구분
+- **Serving Safety**: DMP 조회뿐 아니라 후보 조회에도 timeout을 두고, 검색 문서 변환은 `AdDocumentMapper`로 단일화
+
 ---
 
 ## 🚀 Key Features
 
-- **Parallel Serving**: 유저 프로필과 광고 후보를 병렬 조회하여 응답 지연 최소화
+- **Parallel Serving**: 유저 프로필과 광고 후보를 병렬 조회하여 응답 지연을 줄이는 구조
 - **Timeout & Fallback**: DMP 30ms 타임아웃 기반 fallback 서빙
 - **Failure Classification**: fallback reason으로 장애와 데이터 미스 구분
 - **Multi-stage Filtering**: 성별, 지역, 관심사 기반 단계별 후보 필터링
+- **Matching Boundary**: 후보 조회, 타겟 매칭, 최종 선택 책임을 분리해 이후 랭킹 기준 확장 가능
 
 ---
 
@@ -63,6 +71,7 @@
 - **Vol 3.** [#3. 최적화의 본질 (Optimization)](https://velog.io/@hoonyl/3.-%EA%B4%91%EA%B3%A0-%EC%97%94%EC%A7%84-%EC%B5%9C%EC%A0%81%ED%99%94%EC%9D%98-%EB%B3%B8%EC%A7%88)
 - **Vol 4.** [#4. MySQL과 Elasticsearch를 안전하게 동기화하기](https://velog.io/@hoonyl/4.-MySQL%EA%B3%BC-Elasticsearch%EB%A5%BC-%EC%95%88%EC%A0%84%ED%95%98%EA%B2%8C-%EB%8F%99%EA%B8%B0%ED%99%94%ED%95%98%EA%B8%B0)
 - **Vol 5.** [#5. 멈추지 않는 광고 서빙 흐름 만들기](https://velog.io/@hoonyl/5.-%EB%A9%88%EC%B6%94%EC%A7%80-%EC%95%8A%EB%8A%94-%EA%B4%91%EA%B3%A0-%EC%84%9C%EB%B9%99-%ED%9D%90%EB%A6%84-%EB%A7%8C%EB%93%A4%EA%B8%B0)
+- **Vol 6.** [#6. 광고 선택 로직을 나눈 이유](https://velog.io/@hoonyl/6.-%EA%B4%91%EA%B3%A0-%EC%84%A0%ED%83%9D-%EB%A1%9C%EC%A7%81%EC%9D%84-%EB%82%98%EB%88%88-%EC%9D%B4%EC%9C%A0)
 
 ---
 

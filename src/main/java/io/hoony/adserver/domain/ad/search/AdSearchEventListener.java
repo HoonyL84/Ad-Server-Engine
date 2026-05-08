@@ -9,9 +9,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
-import java.util.Arrays;
-import java.util.stream.Collectors;
-
 /**
  * [Senior Insight] 데이터 동기화의 파수꾼 (EventListener)
  * 이 리스너는 DB 트랜잭션이 '성공적으로 끝났을 때만' 동작하여 데이터 불일치를 방지합니다.
@@ -23,6 +20,7 @@ import java.util.stream.Collectors;
 public class AdSearchEventListener {
 
     private final AdSearchRepository adSearchRepository;
+    private final AdDocumentMapper adDocumentMapper;
 
     /**
      * 광고 생성 이벤트를 수신하여 Elasticsearch에 인덱싱합니다.
@@ -35,23 +33,8 @@ public class AdSearchEventListener {
         log.info("Starting ES sync for ad: {}", ad.getId());
 
         try {
-            // [Mapping] 엔티티(MySQL)를 도큐먼트(ES)로 변환
-            AdDocument document = AdDocument.builder()
-                    .id(ad.getId())
-                    .advertiserId(ad.getAdvertiser().getId())
-                    .title(ad.getTitle())
-                    .imageUrl(ad.getImageUrl())
-                    .clickUrl(ad.getClickUrl())
-                    .maxBid(ad.getMaxBid())
-                    .status(ad.getStatus())
-                    .targetGender(ad.getTargetGender())
-                    .targetLocationId(ad.getTargetLocationId())
-                    .interestTags(parseTags(ad.getTargetInterestTags())) // 문자열을 리스트로 변환
-                    .targetContext(ad.getTargetContext())
-                    .build();
-
             // [Persistence] ES 전송
-            adSearchRepository.save(document);
+            adSearchRepository.save(adDocumentMapper.toDocument(ad));
             log.info("Successfully synced ad: {} to Elasticsearch", ad.getId());
             
         } catch (Exception e) {
@@ -60,13 +43,4 @@ public class AdSearchEventListener {
         }
     }
 
-    /**
-     * 콤마로 구분된 태그 문자열을 리스트로 변환합니다.
-     */
-    private java.util.List<String> parseTags(String tags) {
-        if (tags == null || tags.isBlank()) return java.util.Collections.emptyList();
-        return Arrays.stream(tags.split(","))
-                .map(String::trim)
-                .collect(Collectors.toList());
-    }
 }

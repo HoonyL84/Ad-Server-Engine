@@ -22,16 +22,25 @@ public class AdServingService {
 
     private final UserProfileClient userProfileClient;
     private final AdCandidateSearchService adCandidateSearchService;
+    private final AdMatcher adMatcher;
+    private final AdRanker adRanker;
     private final long dmpTimeoutMs;
+    private final long candidateTimeoutMs;
 
     public AdServingService(
             UserProfileClient userProfileClient,
             AdCandidateSearchService adCandidateSearchService,
-            @Value("${ad-server.serving.dmp-timeout-ms:30}") long dmpTimeoutMs
+            AdMatcher adMatcher,
+            AdRanker adRanker,
+            @Value("${ad-server.serving.dmp-timeout-ms:30}") long dmpTimeoutMs,
+            @Value("${ad-server.serving.candidate-timeout-ms:50}") long candidateTimeoutMs
     ) {
         this.userProfileClient = userProfileClient;
         this.adCandidateSearchService = adCandidateSearchService;
+        this.adMatcher = adMatcher;
+        this.adRanker = adRanker;
         this.dmpTimeoutMs = dmpTimeoutMs;
+        this.candidateTimeoutMs = candidateTimeoutMs;
     }
 
     public AdServingResult serve(String userId, String slotId) {
@@ -41,29 +50,65 @@ public class AdServingService {
             Future<List<AdDocument>> candidatesFuture =
                     executor.submit(() -> adCandidateSearchService.searchCandidates(slotId));
 
-            List<AdDocument> candidates = candidatesFuture.get();
+            CandidateResult candidateResult = getCandidatesWithTimeout(candidatesFuture);
+            if (candidateResult.reason.isPresent()) {
+                return new AdServingResult(null, true, candidateResult.reason.get(), 0, 0);
+            }
+
+            List<AdDocument> candidates = candidateResult.candidates;
             if (candidates.isEmpty()) {
-                return new AdServingResult(null, true, ServingFallbackReason.NO_CANDIDATE);
+                return new AdServingResult(null, true, ServingFallbackReason.NO_CANDIDATE, 0, 0);
             }
 
             ProfileResult profileResult = getProfileWithTimeout(profileFuture);
 
             if (profileResult.reason == ServingFallbackReason.NONE) {
-                List<AdDocument> filtered = filterCandidates(candidates, profileResult.profile.orElseThrow());
+                List<AdDocument> filtered = adMatcher.match(candidates, profileResult.profile.orElseThrow());
                 if (!filtered.isEmpty()) {
-                    return new AdServingResult(filtered.get(0), false, ServingFallbackReason.NONE);
+                    return new AdServingResult(
+                            adRanker.select(filtered).orElseThrow(),
+                            false,
+                            ServingFallbackReason.NONE,
+                            candidates.size(),
+                            filtered.size()
+                    );
                 }
-                return new AdServingResult(candidates.get(0), true, ServingFallbackReason.TARGET_NOT_MATCHED);
+                return new AdServingResult(
+                        adRanker.select(candidates).orElseThrow(),
+                        true,
+                        ServingFallbackReason.TARGET_NOT_MATCHED,
+                        candidates.size(),
+                        0
+                );
             }
 
-            return new AdServingResult(candidates.get(0), true, profileResult.reason);
+            return new AdServingResult(
+                    adRanker.select(candidates).orElseThrow(),
+                    true,
+                    profileResult.reason,
+                    candidates.size(),
+                    0
+            );
+        } catch (RuntimeException e) {
+            log.warn("Serving failed unexpectedly. userId={}, slotId={}", userId, slotId, e);
+            return new AdServingResult(null, true, ServingFallbackReason.CANDIDATE_ERROR, 0, 0);
+        }
+    }
+
+    private CandidateResult getCandidatesWithTimeout(Future<List<AdDocument>> candidatesFuture) {
+        try {
+            return new CandidateResult(
+                    candidatesFuture.get(candidateTimeoutMs, TimeUnit.MILLISECONDS),
+                    Optional.empty()
+            );
+        } catch (TimeoutException e) {
+            candidatesFuture.cancel(true);
+            return new CandidateResult(List.of(), Optional.of(ServingFallbackReason.CANDIDATE_TIMEOUT));
+        } catch (ExecutionException e) {
+            return new CandidateResult(List.of(), Optional.of(ServingFallbackReason.CANDIDATE_ERROR));
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            log.warn("Serving interrupted. userId={}, slotId={}", userId, slotId, e);
-            return new AdServingResult(null, true, ServingFallbackReason.DMP_ERROR);
-        } catch (ExecutionException e) {
-            log.warn("Candidate search failed. userId={}, slotId={}", userId, slotId, e);
-            return new AdServingResult(null, true, ServingFallbackReason.DMP_ERROR);
+            return new CandidateResult(List.of(), Optional.of(ServingFallbackReason.CANDIDATE_ERROR));
         }
     }
 
@@ -85,39 +130,9 @@ public class AdServingService {
         }
     }
 
-    private List<AdDocument> filterCandidates(List<AdDocument> candidates, UserProfile profile) {
-        return candidates.stream()
-                .filter(ad -> genderMatches(ad.getTargetGender(), profile.gender()))
-                .filter(ad -> locationMatches(ad.getTargetLocationId(), profile.locationId()))
-                .filter(ad -> interestMatches(ad.getInterestTags(), profile.tags()))
-                .toList();
-    }
-
-    private boolean genderMatches(String adGender, String userGender) {
-        if (adGender == null || adGender.isBlank() || "ALL".equalsIgnoreCase(adGender)) {
-            return true;
-        }
-        return adGender.equalsIgnoreCase(userGender);
-    }
-
-    private boolean locationMatches(String adLocation, String userLocation) {
-        if (adLocation == null || adLocation.isBlank() || "0".equals(adLocation)) {
-            return true;
-        }
-        return adLocation.equals(userLocation);
-    }
-
-    private boolean interestMatches(List<String> adTags, List<String> userTags) {
-        if (adTags == null || adTags.isEmpty()) {
-            return true;
-        }
-        if (userTags == null || userTags.isEmpty()) {
-            return false;
-        }
-        return adTags.stream().anyMatch(tag ->
-                userTags.stream().anyMatch(userTag -> userTag.equalsIgnoreCase(tag)));
-    }
-
     private record ProfileResult(Optional<UserProfile> profile, ServingFallbackReason reason) {
+    }
+
+    private record CandidateResult(List<AdDocument> candidates, Optional<ServingFallbackReason> reason) {
     }
 }

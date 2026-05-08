@@ -59,10 +59,7 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
     implementation 'org.springframework.kafka:spring-kafka'
 
-    // 6. Stability (Resilience4j)
-    implementation 'io.github.resilience4j:resilience4j-spring-boot3:2.2.0'
-
-    // 7. Utils
+    // 6. Utils
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
     implementation 'org.mapstruct:mapstruct:1.5.5.Final'

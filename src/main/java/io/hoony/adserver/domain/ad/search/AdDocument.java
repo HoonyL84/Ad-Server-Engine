@@ -13,7 +13,7 @@ import java.util.Map;
  * [Senior Insight] 왜 ES 전용 AdDocument를 별도로 정의하는가?
  * 1. 계층 간 격리: JPA Entity(RDB)와 ES Document(NoSQL)는 데이터 모델이 다릅니다. 하나에 통합하면 어노테이션 지옥이 됩니다.
  * 2. 타입 최적화: RDB는 콤마(,)로 된 문자열이지만, ES는 배열(List)로 저장해야 고속 '태그 검색'이 가능합니다.
- * 3. 검색 전용: 광고 서빙 시 불필요한 필드(이미지/클릭 URL 등)는 제외하고 검색에 꼭 필요한 데이터만 인덱싱하여 성능을 극대화합니다.
+ * 3. 검색/서빙 전용: 후보 조회와 응답 생성에 필요한 필드만 분리해 서빙 경로를 단순하게 유지합니다.
  */
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -64,9 +64,8 @@ public class AdDocument {
     private List<String> interestTags;
 
     /**
-     * [Soft Filter] JSON 형태의 추가 타겟팅 문맥 (나이 등)
-     * 이 필드는 ES에서 직접 검색하기보다, 추출된 후보군을 애플리케이션 레이어에서 
-     * Strategy 패턴(AdMatcher)으로 정밀 검증할 때 사용합니다.
+     * JSON 형태의 추가 타겟팅 문맥.
+     * 현재 서빙 필터에는 사용하지 않고, 이후 정책 확장 지점으로 둡니다.
      */
     @Field(type = FieldType.Object)
     private Map<String, Object> targetContext;

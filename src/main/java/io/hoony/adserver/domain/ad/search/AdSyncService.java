@@ -10,9 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 
-import java.util.Arrays;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * [Senior Insight] Bulk Sync Service (Chunk-based)
@@ -26,6 +24,7 @@ public class AdSyncService {
 
     private final AdRepository adRepository;
     private final AdSearchRepository adSearchRepository;
+    private final AdDocumentMapper adDocumentMapper;
 
     private static final int CHUNK_SIZE = 100;
 
@@ -51,8 +50,8 @@ public class AdSyncService {
 
             // 2. 검색 전용 도큐먼트(AdDocument)로 변환
             List<AdDocument> documents = ads.stream()
-                    .map(this::convertToDocument)
-                    .collect(Collectors.toList());
+                    .map(adDocumentMapper::toDocument)
+                    .toList();
 
             // 3. Bulk Indexing 수행 (해당 Chunk 저장)
             adSearchRepository.saveAll(documents);
@@ -67,31 +66,4 @@ public class AdSyncService {
         return totalSyncedCount;
     }
 
-    /**
-     * [Consistency] AdSearchEventListener와 동일한 변환 로직을 사용합니다.
-     */
-    private AdDocument convertToDocument(Ad ad) {
-        return AdDocument.builder()
-                .id(ad.getId())
-                .advertiserId(ad.getAdvertiser().getId())
-                .title(ad.getTitle())
-                .imageUrl(ad.getImageUrl())
-                .clickUrl(ad.getClickUrl())
-                .maxBid(ad.getMaxBid())
-                .status(ad.getStatus())
-                .targetGender(ad.getTargetGender())
-                .targetLocationId(ad.getTargetLocationId())
-                .interestTags(parseTags(ad.getTargetInterestTags()))
-                .targetContext(ad.getTargetContext())
-                .build();
-    }
-
-    private List<String> parseTags(String tags) {
-        if (tags == null || tags.isBlank()) {
-            return List.of();
-        }
-        return Arrays.stream(tags.split(","))
-                .map(String::trim)
-                .collect(Collectors.toList());
-    }
 }

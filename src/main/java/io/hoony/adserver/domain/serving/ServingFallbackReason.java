@@ -6,5 +6,7 @@ public enum ServingFallbackReason {
     TARGET_NOT_MATCHED,
     DMP_TIMEOUT,
     DMP_ERROR,
+    CANDIDATE_TIMEOUT,
+    CANDIDATE_ERROR,
     NO_CANDIDATE
 }

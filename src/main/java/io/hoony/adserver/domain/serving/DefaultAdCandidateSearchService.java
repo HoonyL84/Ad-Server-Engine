@@ -4,9 +4,10 @@ import io.hoony.adserver.domain.ad.AdStatus;
 import io.hoony.adserver.domain.ad.search.AdDocument;
 import io.hoony.adserver.domain.ad.search.AdSearchRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
-import java.util.Comparator;
 import java.util.List;
 
 @Service
@@ -19,11 +20,11 @@ public class DefaultAdCandidateSearchService implements AdCandidateSearchService
 
     @Override
     public List<AdDocument> searchCandidates(String slotId) {
-        List<AdDocument> candidates = adSearchRepository.findByStatus(AdStatus.ACTIVE);
-        return candidates.stream()
-                .sorted(Comparator.comparing(AdDocument::getMaxBid).reversed())
-                .limit(MAX_CANDIDATES)
-                .toList();
+        PageRequest pageRequest = PageRequest.of(
+                0,
+                MAX_CANDIDATES,
+                Sort.by(Sort.Direction.DESC, "maxBid")
+        );
+        return adSearchRepository.findByStatus(AdStatus.ACTIVE, pageRequest);
     }
 }
-

@@ -47,6 +47,9 @@ spring:
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
 
 ad-server:
+  serving:
+    dmp-timeout-ms: 30
+    candidate-timeout-ms: 50
   grpc:
     port: 9090
   dmp:
