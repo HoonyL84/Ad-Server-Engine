@@ -8,5 +8,6 @@ public enum ServingFallbackReason {
     DMP_ERROR,
     CANDIDATE_TIMEOUT,
     CANDIDATE_ERROR,
+    BUDGET_EXHAUSTED,
     NO_CANDIDATE
 }

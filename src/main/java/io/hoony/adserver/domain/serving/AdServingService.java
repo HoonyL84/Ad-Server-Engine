@@ -24,6 +24,7 @@ public class AdServingService {
     private final AdCandidateSearchService adCandidateSearchService;
     private final AdMatcher adMatcher;
     private final AdRanker adRanker;
+    private final AdBudgetService adBudgetService;
     private final long dmpTimeoutMs;
     private final long candidateTimeoutMs;
 
@@ -32,6 +33,7 @@ public class AdServingService {
             AdCandidateSearchService adCandidateSearchService,
             AdMatcher adMatcher,
             AdRanker adRanker,
+            AdBudgetService adBudgetService,
             @Value("${ad-server.serving.dmp-timeout-ms:30}") long dmpTimeoutMs,
             @Value("${ad-server.serving.candidate-timeout-ms:50}") long candidateTimeoutMs
     ) {
@@ -39,6 +41,7 @@ public class AdServingService {
         this.adCandidateSearchService = adCandidateSearchService;
         this.adMatcher = adMatcher;
         this.adRanker = adRanker;
+        this.adBudgetService = adBudgetService;
         this.dmpTimeoutMs = dmpTimeoutMs;
         this.candidateTimeoutMs = candidateTimeoutMs;
     }
@@ -65,34 +68,36 @@ public class AdServingService {
             if (profileResult.reason == ServingFallbackReason.NONE) {
                 List<AdDocument> filtered = adMatcher.match(candidates, profileResult.profile.orElseThrow());
                 if (!filtered.isEmpty()) {
-                    return new AdServingResult(
-                            adRanker.select(filtered).orElseThrow(),
-                            false,
-                            ServingFallbackReason.NONE,
-                            candidates.size(),
-                            filtered.size()
-                    );
+                    return selectSpendableAd(filtered, false, ServingFallbackReason.NONE, candidates.size(), filtered.size());
                 }
-                return new AdServingResult(
-                        adRanker.select(candidates).orElseThrow(),
-                        true,
-                        ServingFallbackReason.TARGET_NOT_MATCHED,
-                        candidates.size(),
-                        0
-                );
+                return selectSpendableAd(candidates, true, ServingFallbackReason.TARGET_NOT_MATCHED, candidates.size(), 0);
             }
 
-            return new AdServingResult(
-                    adRanker.select(candidates).orElseThrow(),
-                    true,
-                    profileResult.reason,
-                    candidates.size(),
-                    0
-            );
+            return selectSpendableAd(candidates, true, profileResult.reason, candidates.size(), 0);
         } catch (RuntimeException e) {
             log.warn("Serving failed unexpectedly. userId={}, slotId={}", userId, slotId, e);
             return new AdServingResult(null, true, ServingFallbackReason.CANDIDATE_ERROR, 0, 0);
         }
+    }
+
+    private AdServingResult selectSpendableAd(
+            List<AdDocument> candidates,
+            boolean fallback,
+            ServingFallbackReason fallbackReason,
+            int candidateCount,
+            int matchedCount
+    ) {
+        return adRanker.rank(candidates).stream()
+                .filter(adBudgetService::trySpend)
+                .findFirst()
+                .map(ad -> new AdServingResult(ad, fallback, fallbackReason, candidateCount, matchedCount))
+                .orElseGet(() -> new AdServingResult(
+                        null,
+                        true,
+                        ServingFallbackReason.BUDGET_EXHAUSTED,
+                        candidateCount,
+                        matchedCount
+                ));
     }
 
     private CandidateResult getCandidatesWithTimeout(Future<List<AdDocument>> candidatesFuture) {

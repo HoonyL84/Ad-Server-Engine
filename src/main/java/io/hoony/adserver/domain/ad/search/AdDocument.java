@@ -46,6 +46,12 @@ public class AdDocument {
     @Field(type = FieldType.Double)
     private BigDecimal maxBid; // 랭킹 정렬을 위한 입찰가
 
+    @Field(type = FieldType.Double)
+    private BigDecimal totalBudget;
+
+    @Field(type = FieldType.Double)
+    private BigDecimal spentAmount;
+
     @Field(type = FieldType.Keyword)
     private AdStatus status; // ACTIVE 인 광고만 필터링하기 위함
 
@@ -69,4 +75,10 @@ public class AdDocument {
      */
     @Field(type = FieldType.Object)
     private Map<String, Object> targetContext;
+
+    public BigDecimal remainingBudget() {
+        BigDecimal total = totalBudget == null ? BigDecimal.ZERO : totalBudget;
+        BigDecimal spent = spentAmount == null ? BigDecimal.ZERO : spentAmount;
+        return total.subtract(spent).max(BigDecimal.ZERO);
+    }
 }

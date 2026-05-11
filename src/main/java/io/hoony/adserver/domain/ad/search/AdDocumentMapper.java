@@ -17,6 +17,8 @@ public class AdDocumentMapper {
                 .imageUrl(ad.getImageUrl())
                 .clickUrl(ad.getClickUrl())
                 .maxBid(ad.getMaxBid())
+                .totalBudget(ad.getTotalBudget())
+                .spentAmount(ad.getSpentAmount())
                 .status(ad.getStatus())
                 .targetGender(ad.getTargetGender())
                 .targetLocationId(ad.getTargetLocationId())

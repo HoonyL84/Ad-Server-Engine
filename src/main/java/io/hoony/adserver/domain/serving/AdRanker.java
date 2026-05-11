@@ -7,5 +7,7 @@ import java.util.Optional;
 
 public interface AdRanker {
 
+    List<AdDocument> rank(List<AdDocument> candidates);
+
     Optional<AdDocument> select(List<AdDocument> candidates);
 }

@@ -12,11 +12,21 @@ import java.util.Optional;
 public class MaxBidAdRanker implements AdRanker {
 
     @Override
-    public Optional<AdDocument> select(List<AdDocument> candidates) {
+    public List<AdDocument> rank(List<AdDocument> candidates) {
         if (candidates == null || candidates.isEmpty()) {
-            return Optional.empty();
+            return List.of();
         }
         return candidates.stream()
-                .max(Comparator.comparing(ad -> ad.getMaxBid() == null ? BigDecimal.ZERO : ad.getMaxBid()));
+                .sorted(Comparator.comparing(this::bidOrZero).reversed())
+                .toList();
+    }
+
+    @Override
+    public Optional<AdDocument> select(List<AdDocument> candidates) {
+        return rank(candidates).stream().findFirst();
+    }
+
+    private BigDecimal bidOrZero(AdDocument ad) {
+        return ad.getMaxBid() == null ? BigDecimal.ZERO : ad.getMaxBid();
     }
 }
