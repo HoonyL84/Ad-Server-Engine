@@ -3,28 +3,88 @@ package io.hoony.adserver.domain.serving;
 import io.hoony.adserver.domain.ad.AdStatus;
 import io.hoony.adserver.domain.ad.search.AdDocument;
 import io.hoony.adserver.domain.ad.search.AdSearchRepository;
-import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
+@Slf4j
 @Service
-@RequiredArgsConstructor
 public class DefaultAdCandidateSearchService implements AdCandidateSearchService {
 
     private static final int MAX_CANDIDATES = 200;
 
     private final AdSearchRepository adSearchRepository;
+    private final long candidateCacheTtlMs;
+    private volatile CachedCandidates cachedCandidates = CachedCandidates.expired();
+
+    public DefaultAdCandidateSearchService(
+            AdSearchRepository adSearchRepository,
+            @Value("${ad-server.serving.candidate-cache-ttl-ms:100}") long candidateCacheTtlMs
+    ) {
+        this.adSearchRepository = adSearchRepository;
+        this.candidateCacheTtlMs = candidateCacheTtlMs;
+    }
 
     @Override
     public List<AdDocument> searchCandidates(String slotId) {
+        long now = System.nanoTime();
+        CachedCandidates current = cachedCandidates;
+        if (current.isValid(now)) {
+            return current.candidates();
+        }
+
+        synchronized (this) {
+            current = cachedCandidates;
+            if (current.isValid(now)) {
+                return current.candidates();
+            }
+
+            List<AdDocument> candidates = loadCandidates();
+            cachedCandidates = CachedCandidates.from(candidates, candidateCacheTtlMs);
+            return candidates;
+        }
+    }
+
+    private List<AdDocument> loadCandidates() {
         PageRequest pageRequest = PageRequest.of(
                 0,
                 MAX_CANDIDATES,
                 Sort.by(Sort.Direction.DESC, "maxBid")
         );
-        return adSearchRepository.findByStatus(AdStatus.ACTIVE, pageRequest);
+
+        long startedAt = System.nanoTime();
+        List<AdDocument> candidates = List.copyOf(adSearchRepository.findByStatus(AdStatus.ACTIVE, pageRequest));
+        long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt);
+
+        log.debug(
+                "Candidate cache refreshed. size={}, elapsedMs={}, ttlMs={}",
+                candidates.size(),
+                elapsedMs,
+                candidateCacheTtlMs
+        );
+
+        return candidates;
+    }
+
+    private record CachedCandidates(List<AdDocument> candidates, long expiresAtNanos) {
+
+        static CachedCandidates expired() {
+            return new CachedCandidates(List.of(), 0L);
+        }
+
+        static CachedCandidates from(List<AdDocument> candidates, long ttlMs) {
+            long safeTtlMs = Math.max(ttlMs, 0L);
+            long expiresAtNanos = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(safeTtlMs);
+            return new CachedCandidates(candidates, expiresAtNanos);
+        }
+
+        boolean isValid(long nowNanos) {
+            return nowNanos < expiresAtNanos;
+        }
     }
 }

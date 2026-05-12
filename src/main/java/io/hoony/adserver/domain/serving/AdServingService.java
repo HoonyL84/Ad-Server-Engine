@@ -11,7 +11,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -25,6 +24,7 @@ public class AdServingService {
     private final AdMatcher adMatcher;
     private final AdRanker adRanker;
     private final AdBudgetService adBudgetService;
+    private final ExecutorService executorService;
     private final long dmpTimeoutMs;
     private final long candidateTimeoutMs;
 
@@ -34,6 +34,7 @@ public class AdServingService {
             AdMatcher adMatcher,
             AdRanker adRanker,
             AdBudgetService adBudgetService,
+            ExecutorService executorService,
             @Value("${ad-server.serving.dmp-timeout-ms:30}") long dmpTimeoutMs,
             @Value("${ad-server.serving.candidate-timeout-ms:50}") long candidateTimeoutMs
     ) {
@@ -42,16 +43,17 @@ public class AdServingService {
         this.adMatcher = adMatcher;
         this.adRanker = adRanker;
         this.adBudgetService = adBudgetService;
+        this.executorService = executorService;
         this.dmpTimeoutMs = dmpTimeoutMs;
         this.candidateTimeoutMs = candidateTimeoutMs;
     }
 
     public AdServingResult serve(String userId, String slotId) {
-        try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+        try {
             Future<Optional<UserProfile>> profileFuture =
-                    executor.submit(() -> userProfileClient.getUserProfile(userId));
+                    executorService.submit(() -> userProfileClient.getUserProfile(userId));
             Future<List<AdDocument>> candidatesFuture =
-                    executor.submit(() -> adCandidateSearchService.searchCandidates(slotId));
+                    executorService.submit(() -> adCandidateSearchService.searchCandidates(slotId));
 
             CandidateResult candidateResult = getCandidatesWithTimeout(candidatesFuture);
             if (candidateResult.reason.isPresent()) {
@@ -88,6 +90,7 @@ public class AdServingService {
             int matchedCount
     ) {
         return adRanker.rank(candidates).stream()
+                .filter(ad -> !adBudgetService.isExhausted(ad))
                 .filter(adBudgetService::trySpend)
                 .findFirst()
                 .map(ad -> new AdServingResult(ad, fallback, fallbackReason, candidateCount, matchedCount))

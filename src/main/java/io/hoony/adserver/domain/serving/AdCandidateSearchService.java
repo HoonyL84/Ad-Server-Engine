@@ -7,4 +7,3 @@ import java.util.List;
 public interface AdCandidateSearchService {
     List<AdDocument> searchCandidates(String slotId);
 }
-

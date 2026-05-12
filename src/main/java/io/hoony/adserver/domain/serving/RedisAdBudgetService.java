@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Duration;
 import java.util.List;
 
 @Service
@@ -15,6 +16,8 @@ import java.util.List;
 public class RedisAdBudgetService implements AdBudgetService {
 
     private static final String KEY_PREFIX = "ad:budget:";
+    private static final long IMPRESSION_CHARGE_WON = 10L;
+    private static final long EXHAUSTED_TTL_SECONDS = 300L;
     private static final DefaultRedisScript<Long> SPEND_SCRIPT = new DefaultRedisScript<>("""
             local current = redis.call('GET', KEYS[1])
             if not current then
@@ -25,11 +28,17 @@ public class RedisAdBudgetService implements AdBudgetService {
             local cost = tonumber(ARGV[1])
 
             if current < cost then
+                redis.call('SET', KEYS[2], '1', 'EX', ARGV[3])
                 return -1
             end
 
             local remaining = current - cost
             redis.call('SET', KEYS[1], remaining)
+
+            if remaining < cost then
+                redis.call('SET', KEYS[2], '1', 'EX', ARGV[3])
+            end
+
             return remaining
             """, Long.class);
 
@@ -37,21 +46,44 @@ public class RedisAdBudgetService implements AdBudgetService {
 
     @Override
     public boolean trySpend(AdDocument ad) {
-        long cost = toWon(ad.getMaxBid());
+        long cost = IMPRESSION_CHARGE_WON;
         long initialRemaining = toWon(ad.remainingBudget());
 
         if (cost <= 0 || initialRemaining <= 0) {
+            markExhausted(ad);
             return false;
         }
 
         Long remaining = redisTemplate.execute(
                 SPEND_SCRIPT,
-                List.of(KEY_PREFIX + ad.getId() + ":remaining"),
+                List.of(remainingKey(ad), exhaustedKey(ad)),
                 String.valueOf(cost),
-                String.valueOf(initialRemaining)
+                String.valueOf(initialRemaining),
+                String.valueOf(EXHAUSTED_TTL_SECONDS)
         );
 
         return remaining != null && remaining >= 0;
+    }
+
+    @Override
+    public boolean isExhausted(AdDocument ad) {
+        return Boolean.TRUE.equals(redisTemplate.hasKey(exhaustedKey(ad)));
+    }
+
+    private void markExhausted(AdDocument ad) {
+        redisTemplate.opsForValue().set(
+                exhaustedKey(ad),
+                "1",
+                Duration.ofSeconds(EXHAUSTED_TTL_SECONDS)
+        );
+    }
+
+    private String remainingKey(AdDocument ad) {
+        return KEY_PREFIX + ad.getId() + ":remaining";
+    }
+
+    private String exhaustedKey(AdDocument ad) {
+        return KEY_PREFIX + ad.getId() + ":exhausted";
     }
 
     private long toWon(BigDecimal value) {

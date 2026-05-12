@@ -5,4 +5,6 @@ import io.hoony.adserver.domain.ad.search.AdDocument;
 public interface AdBudgetService {
 
     boolean trySpend(AdDocument ad);
+
+    boolean isExhausted(AdDocument ad);
 }

@@ -4,6 +4,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableAsync;
 import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
@@ -16,8 +17,8 @@ import java.util.concurrent.Executors;
 @EnableAsync // @Async 어노테이션을 활성화합니다.
 public class AsyncConfig {
 
-    @Bean
-    public Executor taskExecutor() {
+    @Bean(destroyMethod = "close")
+    public ExecutorService taskExecutor() {
         // 모든 비동기 작업을 가상 스레드에서 실행하도록 설정
         return Executors.newVirtualThreadPerTaskExecutor();
     }

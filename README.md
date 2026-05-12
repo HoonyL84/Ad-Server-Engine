@@ -57,6 +57,13 @@
 - **Budget Fallback**: 모든 후보의 예산이 부족하면 `BUDGET_EXHAUSTED`로 응답
 - **Won-based Accounting**: 광고 비용은 원 단위로 반올림해 Redis 예산 차감에 사용
 
+#### 8. Performance Baseline (Step 8)
+- **Load Test Scenario**: k6 기반으로 `fashion`, `local`, `home` 3개 지면 광고 서빙 부하 테스트 구성
+- **Candidate Cache**: 짧은 TTL의 후보 캐시로 반복 Elasticsearch 후보 조회 비용 감소
+- **Executor Reuse**: 요청마다 생성하던 executor를 Spring Bean으로 분리해 비동기 실행 오버헤드 감소
+- **Bottleneck Isolation**: Docker k6 네트워크 오류와 애플리케이션 내부 timeout을 분리해 관측
+- **Local Baseline**: 로컬 단일 인스턴스 기준 250 VU에서 광고 응답 성공률 99% 이상 확인
+
 ---
 
 ## 🚀 Key Features
@@ -67,6 +74,7 @@
 - **Multi-stage Filtering**: 성별, 지역, 관심사 기반 단계별 후보 필터링
 - **Matching Boundary**: 후보 조회, 타겟 매칭, 최종 선택 책임을 분리해 이후 랭킹 기준 확장 가능
 - **Budget Control**: Redis 기반 예산 차감으로 예산 부족 광고 서빙 방지
+- **Performance Baseline**: k6 부하 테스트와 병목 분리를 통해 로컬 단일 인스턴스 기준 성능 기준선 수립
 
 ---
 
@@ -80,6 +88,7 @@
 - **Vol 5.** [#5. 멈추지 않는 광고 서빙 흐름 만들기](https://velog.io/@hoonyl/5.-%EB%A9%88%EC%B6%94%EC%A7%80-%EC%95%8A%EB%8A%94-%EA%B4%91%EA%B3%A0-%EC%84%9C%EB%B9%99-%ED%9D%90%EB%A6%84-%EB%A7%8C%EB%93%A4%EA%B8%B0)
 - **Vol 6.** [#6. 광고 선택 로직을 나눈 이유](https://velog.io/@hoonyl/6.-%EA%B4%91%EA%B3%A0-%EC%84%A0%ED%83%9D-%EB%A1%9C%EC%A7%81%EC%9D%84-%EB%82%98%EB%88%88-%EC%9D%B4%EC%9C%A0)
 - **Vol 7.** [#7. 예산이 없는 광고를 막는 흐름 만들기](https://velog.io/@hoonyl/7.-%EC%98%88%EC%82%B0%EC%9D%B4-%EC%97%86%EB%8A%94-%EA%B4%91%EA%B3%A0%EB%A5%BC-%EB%A7%89%EB%8A%94-%ED%9D%90%EB%A6%84-%EB%A7%8C%EB%93%A4%EA%B8%B0)
+- **Vol 8.** [#8. 부하 테스트에서 먼저 분리한 것](https://velog.io/@hoonyl/8.-%EB%B6%80%ED%95%98-%ED%85%8C%EC%8A%A4%ED%8A%B8%EC%97%90%EC%84%9C-%EB%A8%BC%EC%A0%80-%EB%B6%84%EB%A6%AC%ED%95%9C-%EA%B2%83)
 
 ---
 
