@@ -18,6 +18,7 @@ public class RedisAdBudgetService implements AdBudgetService {
     private static final String KEY_PREFIX = "ad:budget:";
     private static final long IMPRESSION_CHARGE_WON = 10L;
     private static final long EXHAUSTED_TTL_SECONDS = 300L;
+    // Redis 안에서 잔액 확인과 차감을 한 번에 처리해 동시 요청의 중복 차감을 줄인다.
     private static final DefaultRedisScript<Long> SPEND_SCRIPT = new DefaultRedisScript<>("""
             local current = redis.call('GET', KEYS[1])
             if not current then

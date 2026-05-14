@@ -59,6 +59,8 @@ ad-server:
       slow-delay-ms: 200
 
 logging:
+  pattern:
+    level: "%5p [traceId:%X{traceId:-}]"
   level:
     root: info
     io.hoony.adserver: debug

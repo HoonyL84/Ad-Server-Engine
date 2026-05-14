@@ -5,11 +5,14 @@ import io.hoony.adserver.domain.user.profile.UserProfile;
 import io.hoony.adserver.domain.user.profile.UserProfileClient;
 import io.micrometer.core.instrument.Timer;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
@@ -61,25 +64,32 @@ public class AdServingService {
 
     private AdServingResult doServe(String userId, String slotId) {
         try {
+            log.debug("Serving started. userId={}, slotId={}", userId, slotId);
             Future<Optional<UserProfile>> profileFuture =
-                    executorService.submit(() -> userProfileClient.getUserProfile(userId));
+                    executorService.submit(withTraceContext(() -> userProfileClient.getUserProfile(userId)));
             Future<List<AdDocument>> candidatesFuture =
-                    executorService.submit(() -> adCandidateSearchService.searchCandidates(slotId));
+                    executorService.submit(withTraceContext(() -> adCandidateSearchService.searchCandidates(slotId)));
 
             CandidateResult candidateResult = getCandidatesWithTimeout(candidatesFuture);
             if (candidateResult.reason.isPresent()) {
+                log.debug("Candidate lookup failed. slotId={}, reason={}", slotId, candidateResult.reason.get());
                 return new AdServingResult(null, true, candidateResult.reason.get(), 0, 0);
             }
 
             List<AdDocument> candidates = candidateResult.candidates;
+            log.debug("Candidate lookup completed. slotId={}, candidateCount={}", slotId, candidates.size());
             if (candidates.isEmpty()) {
+                log.debug("Serving fallback. slotId={}, reason={}", slotId, ServingFallbackReason.NO_CANDIDATE);
                 return new AdServingResult(null, true, ServingFallbackReason.NO_CANDIDATE, 0, 0);
             }
 
             ProfileResult profileResult = getProfileWithTimeout(profileFuture);
+            log.debug("Profile lookup completed. userId={}, reason={}", userId, profileResult.reason);
 
             if (profileResult.reason == ServingFallbackReason.NONE) {
                 List<AdDocument> filtered = adMatcher.match(candidates, profileResult.profile.orElseThrow());
+                log.debug("Target matching completed. slotId={}, candidateCount={}, matchedCount={}",
+                        slotId, candidates.size(), filtered.size());
                 if (!filtered.isEmpty()) {
                     return selectSpendableAd(filtered, false, ServingFallbackReason.NONE, candidates.size(), filtered.size());
                 }
@@ -104,14 +114,22 @@ public class AdServingService {
                 .filter(ad -> !adBudgetService.isExhausted(ad))
                 .filter(adBudgetService::trySpend)
                 .findFirst()
-                .map(ad -> new AdServingResult(ad, fallback, fallbackReason, candidateCount, matchedCount))
-                .orElseGet(() -> new AdServingResult(
-                        null,
-                        true,
-                        ServingFallbackReason.BUDGET_EXHAUSTED,
-                        candidateCount,
-                        matchedCount
-                ));
+                .map(ad -> {
+                    log.debug("Ad selected. adId={}, fallback={}, reason={}, candidateCount={}, matchedCount={}",
+                            ad.getId(), fallback, fallbackReason, candidateCount, matchedCount);
+                    return new AdServingResult(ad, fallback, fallbackReason, candidateCount, matchedCount);
+                })
+                .orElseGet(() -> {
+                    log.debug("Serving fallback. reason={}, candidateCount={}, matchedCount={}",
+                            ServingFallbackReason.BUDGET_EXHAUSTED, candidateCount, matchedCount);
+                    return new AdServingResult(
+                            null,
+                            true,
+                            ServingFallbackReason.BUDGET_EXHAUSTED,
+                            candidateCount,
+                            matchedCount
+                    );
+                });
     }
 
     private CandidateResult getCandidatesWithTimeout(Future<List<AdDocument>> candidatesFuture) {
@@ -147,6 +165,28 @@ public class AdServingService {
             Thread.currentThread().interrupt();
             return new ProfileResult(Optional.empty(), ServingFallbackReason.DMP_ERROR);
         }
+    }
+
+    private <T> Callable<T> withTraceContext(Callable<T> task) {
+        Map<String, String> parentContext = MDC.getCopyOfContextMap();
+
+        return () -> {
+            Map<String, String> previousContext = MDC.getCopyOfContextMap();
+            setMdcContext(parentContext);
+            try {
+                return task.call();
+            } finally {
+                setMdcContext(previousContext);
+            }
+        };
+    }
+
+    private void setMdcContext(Map<String, String> context) {
+        if (context == null || context.isEmpty()) {
+            MDC.clear();
+            return;
+        }
+        MDC.setContextMap(context);
     }
 
     private record ProfileResult(Optional<UserProfile> profile, ServingFallbackReason reason) {
