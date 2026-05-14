@@ -82,8 +82,61 @@ services:
     depends_on:
       - elasticsearch
 
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: ad-server-prometheus
+    ports:
+      - "9091:9090"
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus-data:/prometheus
+    depends_on:
+      - elasticsearch
+      - redis
+      - redis-exporter
+      - elasticsearch-exporter
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    container_name: ad-server-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./observability/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./observability/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.67.0
+    container_name: ad-server-redis-exporter
+    ports:
+      - "9121:9121"
+    environment:
+      REDIS_ADDR: redis://redis:6379
+    depends_on:
+      - redis
+
+  elasticsearch-exporter:
+    image: quay.io/prometheuscommunity/elasticsearch-exporter:v1.8.0
+    container_name: ad-server-es-exporter
+    command:
+      - --es.uri=http://elasticsearch:9200
+    ports:
+      - "9114:9114"
+    depends_on:
+      - elasticsearch
+
 volumes:
   mysql-data:
   redis-data:
   kafka-data:
   es-data:
+  grafana-data:
+  prometheus-data:

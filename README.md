@@ -64,6 +64,13 @@
 - **Bottleneck Isolation**: Docker k6 네트워크 오류와 애플리케이션 내부 timeout을 분리해 관측
 - **Local Baseline**: 로컬 단일 인스턴스 기준 250 VU에서 광고 응답 성공률 99% 이상 확인
 
+#### 9. Observability Baseline (Step 9)
+- **Prometheus Metrics**: `/actuator/prometheus`로 광고 서빙 요청 수, 응답 성공률, latency, fallback reason 노출
+- **Grafana Dashboard**: `Ad Serving Overview` 대시보드로 p95/p99, fallback reason, Redis/ES 상태 관측
+- **Exporter Integration**: Redis / Elasticsearch exporter를 통해 주요 의존 저장소 상태 수집
+- **Alert Rules**: p99 지연, 광고 응답률 저하, timeout 증가, target down 기준의 Prometheus alert rule 구성
+- **Metric Persistence**: Prometheus 데이터를 Docker volume에 저장해 컨테이너 재시작 이후에도 관측 데이터 유지
+
 ---
 
 ## 🚀 Key Features
@@ -75,6 +82,30 @@
 - **Matching Boundary**: 후보 조회, 타겟 매칭, 최종 선택 책임을 분리해 이후 랭킹 기준 확장 가능
 - **Budget Control**: Redis 기반 예산 차감으로 예산 부족 광고 서빙 방지
 - **Performance Baseline**: k6 부하 테스트와 병목 분리를 통해 로컬 단일 인스턴스 기준 성능 기준선 수립
+- **Observability**: Prometheus/Grafana 기반으로 latency, fallback, Redis/ES 상태를 지속 관측
+
+---
+
+## 📊 Local Observability
+
+```powershell
+docker compose up -d prometheus grafana redis-exporter elasticsearch-exporter
+```
+
+- Prometheus: `http://localhost:9091`
+- Grafana: `http://localhost:3000` (`admin` / `admin`)
+- App Metrics: `http://localhost:8080/actuator/prometheus`
+- Grafana Dashboard: `Ad Server > Ad Serving Overview`
+
+Prometheus는 아래 target을 수집합니다.
+
+```text
+ad-server-engine: host.docker.internal:8080/actuator/prometheus
+redis: redis-exporter:9121
+elasticsearch: elasticsearch-exporter:9114
+```
+
+Alert rule은 Prometheus의 `Alerts` 화면에서 확인할 수 있습니다.
 
 ---
 
@@ -89,6 +120,7 @@
 - **Vol 6.** [#6. 광고 선택 로직을 나눈 이유](https://velog.io/@hoonyl/6.-%EA%B4%91%EA%B3%A0-%EC%84%A0%ED%83%9D-%EB%A1%9C%EC%A7%81%EC%9D%84-%EB%82%98%EB%88%88-%EC%9D%B4%EC%9C%A0)
 - **Vol 7.** [#7. 예산이 없는 광고를 막는 흐름 만들기](https://velog.io/@hoonyl/7.-%EC%98%88%EC%82%B0%EC%9D%B4-%EC%97%86%EB%8A%94-%EA%B4%91%EA%B3%A0%EB%A5%BC-%EB%A7%89%EB%8A%94-%ED%9D%90%EB%A6%84-%EB%A7%8C%EB%93%A4%EA%B8%B0)
 - **Vol 8.** [#8. 부하 테스트에서 먼저 분리한 것](https://velog.io/@hoonyl/8.-%EB%B6%80%ED%95%98-%ED%85%8C%EC%8A%A4%ED%8A%B8%EC%97%90%EC%84%9C-%EB%A8%BC%EC%A0%80-%EB%B6%84%EB%A6%AC%ED%95%9C-%EA%B2%83)
+- **Vol 9.** [#9. 부하 테스트 지표를 계속 볼 수 있게 만들기](https://velog.io/@hoonyl/9.-%EB%B6%80%ED%95%98-%ED%85%8C%EC%8A%A4%ED%8A%B8-%EC%A7%80%ED%91%9C%EB%A5%BC-%EA%B3%84%EC%86%8D-%EB%B3%BC-%EC%88%98-%EC%9E%88%EA%B2%8C-%EB%A7%8C%EB%93%A4%EA%B8%B0)
 
 ---
 

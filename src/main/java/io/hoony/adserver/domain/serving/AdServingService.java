@@ -3,6 +3,7 @@ package io.hoony.adserver.domain.serving;
 import io.hoony.adserver.domain.ad.search.AdDocument;
 import io.hoony.adserver.domain.user.profile.UserProfile;
 import io.hoony.adserver.domain.user.profile.UserProfileClient;
+import io.micrometer.core.instrument.Timer;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -24,6 +25,7 @@ public class AdServingService {
     private final AdMatcher adMatcher;
     private final AdRanker adRanker;
     private final AdBudgetService adBudgetService;
+    private final AdServingMetrics adServingMetrics;
     private final ExecutorService executorService;
     private final long dmpTimeoutMs;
     private final long candidateTimeoutMs;
@@ -34,6 +36,7 @@ public class AdServingService {
             AdMatcher adMatcher,
             AdRanker adRanker,
             AdBudgetService adBudgetService,
+            AdServingMetrics adServingMetrics,
             ExecutorService executorService,
             @Value("${ad-server.serving.dmp-timeout-ms:30}") long dmpTimeoutMs,
             @Value("${ad-server.serving.candidate-timeout-ms:50}") long candidateTimeoutMs
@@ -43,12 +46,20 @@ public class AdServingService {
         this.adMatcher = adMatcher;
         this.adRanker = adRanker;
         this.adBudgetService = adBudgetService;
+        this.adServingMetrics = adServingMetrics;
         this.executorService = executorService;
         this.dmpTimeoutMs = dmpTimeoutMs;
         this.candidateTimeoutMs = candidateTimeoutMs;
     }
 
     public AdServingResult serve(String userId, String slotId) {
+        Timer.Sample sample = adServingMetrics.startTimer();
+        AdServingResult result = doServe(userId, slotId);
+        adServingMetrics.record(slotId, result, sample);
+        return result;
+    }
+
+    private AdServingResult doServe(String userId, String slotId) {
         try {
             Future<Optional<UserProfile>> profileFuture =
                     executorService.submit(() -> userProfileClient.getUserProfile(userId));
