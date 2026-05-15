@@ -2,7 +2,6 @@ plugins {
     id 'java'
     id 'org.springframework.boot' version '3.4.0'
     id 'io.spring.dependency-management' version '1.1.6'
-    // gRPC & Protobuf 컴파일을 위한 플러그인
     id 'com.google.protobuf' version '0.9.4'
 }
 
@@ -42,19 +41,17 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     runtimeOnly 'com.h2database:h2'
     runtimeOnly 'com.mysql:mysql-connector-j'
-    // QueryDSL: 복잡한 쿼리 처리를 위한 시니어 표준
     implementation 'com.querydsl:querydsl-jpa:5.1.0:jakarta'
     annotationProcessor "com.querydsl:querydsl-apt:5.1.0:jakarta"
     annotationProcessor "jakarta.persistence:jakarta.persistence-api"
     annotationProcessor "jakarta.annotation:jakarta.annotation-api"
 
-    // 3. Search Engine (Elasticsearch) - 오늘의집 맥락 정보 매칭용
     implementation 'org.springframework.boot:spring-boot-starter-data-elasticsearch'
 
-    // 4. Communication (gRPC) - 당근 초저지연 통신용
     implementation "io.grpc:grpc-netty-shaded:${grpcVersion}"
     implementation "io.grpc:grpc-protobuf:${grpcVersion}"
     implementation "io.grpc:grpc-stub:${grpcVersion}"
+    implementation "com.google.protobuf:protobuf-java:${protobufVersion}"
     compileOnly 'javax.annotation:javax.annotation-api:1.3.2' // Java 9+ 대응
 
     // 5. Distributed (Redis & Kafka)

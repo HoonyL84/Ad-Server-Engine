@@ -2,13 +2,25 @@ package io.hoony.adserver.domain.ad;
 
 import io.hoony.adserver.domain.advertiser.Advertiser;
 import io.hoony.adserver.domain.support.BaseTimeEntity;
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -45,44 +57,31 @@ public class Ad extends BaseTimeEntity {
     private BigDecimal spentAmount = BigDecimal.ZERO;
 
     @Column(name = "start_date", nullable = false)
-    private java.time.LocalDateTime startDate; // 광고 노출 시작 일시
+    private LocalDateTime startDate;
 
     @Column(name = "end_date")
-    private java.time.LocalDateTime endDate; // null일 경우 무제한
+    private LocalDateTime endDate;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     private AdStatus status = AdStatus.ACTIVE;
 
-    /**
-     * 유연한 타겟팅 정보 (JSON)
-     */
     @Convert(converter = TargetContextConverter.class)
     @Column(name = "target_context", columnDefinition = "TEXT")
     private Map<String, Object> targetContext = new HashMap<>();
 
-    /**
-     * 타겟팅 필드: 성별 (M, F, ALL)
-     */
     @Column(name = "target_gender")
     private String targetGender;
 
-    /**
-     * 타겟팅 필드: 계층형 지역 ID (예: '1:11' -> 서울:강남구)
-     */
     @Column(name = "target_location_id")
     private String targetLocationId;
 
-    /**
-     * 고속 필터링용 필드 3: 관심사 태그
-     * 콤마(,)로 구분된 태그 목록 (예: '운동,신발,패션')
-     */
     @Column(name = "target_interest_tags")
     private String targetInterestTags;
 
     @Builder
-    public Ad(String title, String imageUrl, String clickUrl, Advertiser advertiser, BigDecimal maxBid, BigDecimal totalBudget, 
-              BigDecimal spentAmount, java.time.LocalDateTime startDate, java.time.LocalDateTime endDate, AdStatus status, 
+    public Ad(String title, String imageUrl, String clickUrl, Advertiser advertiser, BigDecimal maxBid, BigDecimal totalBudget,
+              BigDecimal spentAmount, LocalDateTime startDate, LocalDateTime endDate, AdStatus status,
               Map<String, Object> targetContext, String targetGender, String targetLocationId, String targetInterestTags) {
         this.title = title;
         this.imageUrl = imageUrl;

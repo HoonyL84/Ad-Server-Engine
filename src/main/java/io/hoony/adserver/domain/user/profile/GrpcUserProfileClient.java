@@ -48,7 +48,6 @@ public class GrpcUserProfileClient implements UserProfileClient {
                     .withDeadlineAfter(requestTimeoutMs, TimeUnit.MILLISECONDS)
                     .getUserProfile(request);
 
-            // The mock DMP returns empty userId when user does not exist.
             if (response.getUserId() == null || response.getUserId().isBlank()) {
                 return Optional.empty();
             }
