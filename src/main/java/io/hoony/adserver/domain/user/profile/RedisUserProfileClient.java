@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
@@ -13,6 +14,7 @@ import java.util.Optional;
 
 @Slf4j
 @Component
+@ConditionalOnProperty(name = "ad-server.dmp.provider", havingValue = "redis")
 @RequiredArgsConstructor
 public class RedisUserProfileClient implements UserProfileClient {
 

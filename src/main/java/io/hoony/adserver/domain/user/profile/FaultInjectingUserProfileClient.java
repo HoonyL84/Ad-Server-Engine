@@ -2,7 +2,7 @@ package io.hoony.adserver.domain.user.profile;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 
@@ -10,7 +10,9 @@ import java.util.Optional;
 
 @Primary
 @Component
-@ConditionalOnProperty(name = "ad-server.dmp.failure-injection.enabled", havingValue = "true")
+@ConditionalOnExpression(
+        "'${ad-server.dmp.provider:grpc}' == 'redis' and '${ad-server.dmp.failure-injection.enabled:false}' == 'true'"
+)
 @RequiredArgsConstructor
 public class FaultInjectingUserProfileClient implements UserProfileClient {
 

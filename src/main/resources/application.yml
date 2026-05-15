@@ -51,9 +51,13 @@ ad-server:
     dmp-timeout-ms: 30
     candidate-timeout-ms: 50
     candidate-cache-ttl-ms: 100
-  grpc:
-    port: 9090
   dmp:
+    provider: grpc
+    grpc:
+      host: localhost
+      port: 9090
+      mock:
+        enabled: true
     failure-injection:
       enabled: false
       slow-delay-ms: 200
