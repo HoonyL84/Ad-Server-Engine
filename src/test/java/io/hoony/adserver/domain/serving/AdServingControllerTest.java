@@ -49,10 +49,13 @@ class AdServingControllerTest {
                         .param("userId", "1")
                         .param("slotId", "home"))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.requestId").isNotEmpty())
                 .andExpect(jsonPath("$.adId").value(101))
                 .andExpect(jsonPath("$.title").value("test-ad"))
                 .andExpect(jsonPath("$.imageUrl").value("https://cdn.ad-server.io/img/101.jpg"))
                 .andExpect(jsonPath("$.clickUrl").value("https://ad-server.io/click/101"))
+                .andExpect(jsonPath("$.impressionUrl").isNotEmpty())
+                .andExpect(jsonPath("$.clickTrackingUrl").isNotEmpty())
                 .andExpect(jsonPath("$.fallback").value(false))
                 .andExpect(jsonPath("$.fallbackReason").value("NONE"));
     }
@@ -67,9 +70,12 @@ class AdServingControllerTest {
                         .param("userId", "slow-1")
                         .param("slotId", "home"))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.requestId").isNotEmpty())
                 .andExpect(jsonPath("$.adId").isEmpty())
                 .andExpect(jsonPath("$.imageUrl").isEmpty())
                 .andExpect(jsonPath("$.clickUrl").isEmpty())
+                .andExpect(jsonPath("$.impressionUrl").isEmpty())
+                .andExpect(jsonPath("$.clickTrackingUrl").isEmpty())
                 .andExpect(jsonPath("$.fallback").value(true))
                 .andExpect(jsonPath("$.fallbackReason").value("DMP_TIMEOUT"));
     }

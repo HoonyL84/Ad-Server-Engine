@@ -35,6 +35,15 @@ class AdServingServiceTest {
         executorService.close();
     }
 
+    @org.junit.jupiter.api.BeforeEach
+    void setUp() {
+        when(adBudgetService.filterExhausted(any())).thenAnswer(invocation -> {
+            List<AdDocument> ads = invocation.getArgument(0);
+            if (ads == null) return List.of();
+            return ads.stream().filter(ad -> !adBudgetService.isExhausted(ad)).toList();
+        });
+    }
+
     @Test
     @DisplayName("프로필과 후보가 정상일 때 타겟 광고를 반환한다.")
     void servesTargetedAdWhenProfileIsAvailable() {

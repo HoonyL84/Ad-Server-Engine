@@ -71,6 +71,28 @@ public class RedisAdBudgetService implements AdBudgetService {
         return Boolean.TRUE.equals(redisTemplate.hasKey(exhaustedKey(ad)));
     }
 
+    @Override
+    public List<AdDocument> filterExhausted(List<AdDocument> ads) {
+        if (ads == null || ads.isEmpty()) {
+            return List.of();
+        }
+
+        List<String> keys = ads.stream().map(this::exhaustedKey).toList();
+        List<String> values = redisTemplate.opsForValue().multiGet(keys);
+
+        if (values == null) {
+            return ads;
+        }
+
+        List<AdDocument> result = new java.util.ArrayList<>();
+        for (int i = 0; i < ads.size(); i++) {
+            if (i < values.size() && values.get(i) == null) {
+                result.add(ads.get(i));
+            }
+        }
+        return result;
+    }
+
     private void markExhausted(AdDocument ad) {
         redisTemplate.opsForValue().set(
                 exhaustedKey(ad),

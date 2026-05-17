@@ -110,8 +110,10 @@ public class AdServingService {
             int candidateCount,
             int matchedCount
     ) {
-        return adRanker.rank(candidates).stream()
-                .filter(ad -> !adBudgetService.isExhausted(ad))
+        List<AdDocument> ranked = adRanker.rank(candidates);
+        List<AdDocument> spendable = adBudgetService.filterExhausted(ranked);
+
+        return spendable.stream()
                 .filter(adBudgetService::trySpend)
                 .findFirst()
                 .map(ad -> {

@@ -2,14 +2,19 @@ import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { Counter, Rate } from 'k6/metrics';
 
+const TARGET_VUS = Number(__ENV.TARGET_VUS || '10');
+const RAMP_UP_DURATION = __ENV.RAMP_UP_DURATION || '30s';
+const HOLD_DURATION = __ENV.HOLD_DURATION || '1m';
+const RAMP_DOWN_DURATION = __ENV.RAMP_DOWN_DURATION || '30s';
+
 export const options = {
   scenarios: {
     baseline: {
       executor: 'ramping-vus',
       stages: [
-        { duration: '30s', target: Number(__ENV.TARGET_VUS || '10') },
-        { duration: '1m', target: Number(__ENV.TARGET_VUS || '10') },
-        { duration: '30s', target: 0 },
+        { duration: RAMP_UP_DURATION, target: TARGET_VUS },
+        { duration: HOLD_DURATION, target: TARGET_VUS },
+        { duration: RAMP_DOWN_DURATION, target: 0 },
       ],
     },
   },
@@ -26,6 +31,8 @@ const SLOT_IDS = (__ENV.SLOT_IDS || __ENV.SLOT_ID || 'fashion,local,home')
   .filter((slotId) => slotId.length > 0);
 const USER_ID_START = Number(__ENV.USER_ID_START || '1');
 const USER_ID_RANGE = Number(__ENV.USER_ID_RANGE || '100000');
+const ENABLE_EVENTS = (__ENV.ENABLE_EVENTS || 'false').toLowerCase() === 'true';
+const CLICK_RATE = Number(__ENV.CLICK_RATE || '0.02');
 
 const fallbackReasonCount = new Counter('ad_fallback_reason_total');
 const fallbackRate = new Rate('ad_fallback_rate');
@@ -39,6 +46,8 @@ const dmpErrorRate = new Rate('ad_dmp_error_rate');
 const noCandidateRate = new Rate('ad_no_candidate_rate');
 const targetNotMatchedRate = new Rate('ad_target_not_matched_rate');
 const profileNotFoundRate = new Rate('ad_profile_not_found_rate');
+const impressionEventRate = new Rate('ad_impression_event_rate');
+const clickEventRate = new Rate('ad_click_event_rate');
 
 export default function () {
   const userId = String(USER_ID_START + (__VU + __ITER) % USER_ID_RANGE);
@@ -48,6 +57,7 @@ export default function () {
 
     const response = http.get(url, {
       tags: {
+        name: 'GET /api/v1/ads/serve',
         endpoint: 'serve',
         slotId,
       },
@@ -80,6 +90,29 @@ export default function () {
       noCandidateRate.add(reason === 'NO_CANDIDATE', { slotId });
       targetNotMatchedRate.add(reason === 'TARGET_NOT_MATCHED', { slotId });
       profileNotFoundRate.add(reason === 'PROFILE_NOT_FOUND', { slotId });
+
+      if (ENABLE_EVENTS && body.adId !== null && body.adId !== undefined) {
+        const impressionResponse = http.get(body.impressionUrl, {
+          tags: {
+            name: 'GET /api/v1/ad-events/impressions',
+            endpoint: 'impression',
+            slotId,
+          },
+        });
+        impressionEventRate.add(impressionResponse.status === 200, { slotId });
+
+        if (Math.random() < CLICK_RATE) {
+          const clickResponse = http.get(body.clickTrackingUrl, {
+            redirects: 0,
+            tags: {
+              name: 'GET /api/v1/ad-events/clicks',
+              endpoint: 'click',
+              slotId,
+            },
+          });
+          clickEventRate.add(clickResponse.status >= 200 && clickResponse.status < 400, { slotId });
+        }
+      }
     }
   }
 
