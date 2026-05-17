@@ -78,6 +78,13 @@
 - **Fallback Correlation**: fallback reason과 Trace ID를 함께 기록해 장애와 데이터 미스 원인 추적 강화
 - **Regression Check**: 추적성 추가 이후 기존 서빙 시나리오(정상/timeout/fallback) 회귀 테스트 확인
 
+#### 11. K8s Deployment Readiness (Step 11)
+- **K8s Manifests**: Deployment, Service, ConfigMap, Secret 기반 실행 구성 추가
+- **Health Probes**: readiness / liveness probe로 Pod 상태 점검 기준 구성
+- **Self-healing Check**: Pod 강제 종료 이후 재기동되는 흐름 확인
+- **Resource Boundary**: requests / limits를 명시해 HPA 판단을 위한 기본 리소스 기준 설정
+- **Scale-out Readiness**: 로컬 K8s에서 HPA manifest와 Prometheus scrape annotation을 준비하고, 자동 확장 가능 조건을 정리
+
 ---
 
 ## Key Features
@@ -91,6 +98,7 @@
 - **Performance Baseline**: k6 부하 테스트와 병목 분리를 통해 로컬 단일 인스턴스 기준 성능 기준선 수립
 - **Observability**: Prometheus/Grafana 기반으로 latency, fallback, Redis/ES 상태를 지속 관측
 - **Traceability**: Trace ID와 MDC 기반으로 요청 단위 원인 추적 경로 확보
+- **K8s Readiness**: K8s 위에서 실행, 상태 점검, self-healing, scale-out 준비 조건 확인
 
 ---
 
@@ -130,6 +138,7 @@ Alert rule은 Prometheus의 `Alerts` 화면에서 확인할 수 있습니다.
 - **Vol 8.** [#8. 부하 테스트에서 먼저 분리한 것](https://velog.io/@hoonyl/8.-%EB%B6%80%ED%95%98-%ED%85%8C%EC%8A%A4%ED%8A%B8%EC%97%90%EC%84%9C-%EB%A8%BC%EC%A0%80-%EB%B6%84%EB%A6%AC%ED%95%9C-%EA%B2%83)
 - **Vol 9.** [#9. 부하 테스트 지표를 계속 볼 수 있게 만들기](https://velog.io/@hoonyl/9.-%EB%B6%80%ED%95%98-%ED%85%8C%EC%8A%A4%ED%8A%B8-%EC%A7%80%ED%91%9C%EB%A5%BC-%EA%B3%84%EC%86%8D-%EB%B3%BC-%EC%88%98-%EC%9E%88%EA%B2%8C-%EB%A7%8C%EB%93%A4%EA%B8%B0)
 - **Vol 10.** [#10. 문제가 보였을 때 요청을 따라갈 수 있게 만들기](https://velog.io/@hoonyl/10.-%EB%AC%B8%EC%A0%9C%EA%B0%80-%EB%B3%B4%EC%98%80%EC%9D%84-%EB%95%8C-%EC%9A%94%EC%B2%AD%EC%9D%84-%EB%94%B0%EB%9D%BC%EA%B0%88-%EC%88%98-%EC%9E%88%EA%B2%8C-%EB%A7%8C%EB%93%A4%EA%B8%B0)
+- **Vol 11.** [#11. 광고 서버를 K8s 위에서 실행해보기](https://velog.io/@hoonyl/11.-%EA%B4%91%EA%B3%A0-%EC%84%9C%EB%B2%84%EB%A5%BC-K8s-%EC%9C%84%EC%97%90%EC%84%9C-%EC%8B%A4%ED%96%89%ED%95%B4%EB%B3%B4%EA%B8%B0)
 
 ---
 
@@ -139,4 +148,4 @@ Alert rule은 Prometheus의 `Alerts` 화면에서 확인할 수 있습니다.
 - **Database**: MySQL 8.0, Redis
 - **Search Engine**: Elasticsearch 8.15.0
 - **Communication**: gRPC (Protobuf 3)
-- **Tools**: Gradle, Docker Compose
+- **Tools**: Gradle, Docker Compose, Kubernetes
