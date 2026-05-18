@@ -85,6 +85,13 @@
 - **Resource Boundary**: requests / limits를 명시해 HPA 판단을 위한 기본 리소스 기준 설정
 - **Scale-out Readiness**: 로컬 K8s에서 HPA manifest와 Prometheus scrape annotation을 준비하고, 자동 확장 가능 조건을 정리
 
+#### 12. Event Pipeline (Step 12)
+- **Tracking URLs**: 광고 응답에 `requestId`, `impressionUrl`, `clickTrackingUrl`을 포함해 노출/클릭 수집 경로 추가
+- **Idempotency Guard**: Redis `SETNX`와 `eventId` 기준으로 중복 이벤트를 앞단에서 차단
+- **Async Event Ingestion**: Kafka topic(`ad-impressions`, `ad-clicks`)으로 이벤트 저장을 응답 경로에서 분리
+- **Click Redirect**: 클릭 이벤트 수집 후 광고주 landing URL로 redirect 처리
+- **Event Metrics**: impression / click / duplicate / failure rate를 Prometheus 지표로 노출
+
 ---
 
 ## Key Features
@@ -99,6 +106,7 @@
 - **Observability**: Prometheus/Grafana 기반으로 latency, fallback, Redis/ES 상태를 지속 관측
 - **Traceability**: Trace ID와 MDC 기반으로 요청 단위 원인 추적 경로 확보
 - **K8s Readiness**: K8s 위에서 실행, 상태 점검, self-healing, scale-out 준비 조건 확인
+- **Event Pipeline**: 노출/클릭 이벤트를 Kafka로 분리해 사용자 응답 경로와 저장 경로를 분리
 
 ---
 
@@ -139,6 +147,7 @@ Alert rule은 Prometheus의 `Alerts` 화면에서 확인할 수 있습니다.
 - **Vol 9.** [#9. 부하 테스트 지표를 계속 볼 수 있게 만들기](https://velog.io/@hoonyl/9.-%EB%B6%80%ED%95%98-%ED%85%8C%EC%8A%A4%ED%8A%B8-%EC%A7%80%ED%91%9C%EB%A5%BC-%EA%B3%84%EC%86%8D-%EB%B3%BC-%EC%88%98-%EC%9E%88%EA%B2%8C-%EB%A7%8C%EB%93%A4%EA%B8%B0)
 - **Vol 10.** [#10. 문제가 보였을 때 요청을 따라갈 수 있게 만들기](https://velog.io/@hoonyl/10.-%EB%AC%B8%EC%A0%9C%EA%B0%80-%EB%B3%B4%EC%98%80%EC%9D%84-%EB%95%8C-%EC%9A%94%EC%B2%AD%EC%9D%84-%EB%94%B0%EB%9D%BC%EA%B0%88-%EC%88%98-%EC%9E%88%EA%B2%8C-%EB%A7%8C%EB%93%A4%EA%B8%B0)
 - **Vol 11.** [#11. 광고 서버를 K8s 위에서 실행해보기](https://velog.io/@hoonyl/11.-%EA%B4%91%EA%B3%A0-%EC%84%9C%EB%B2%84%EB%A5%BC-K8s-%EC%9C%84%EC%97%90%EC%84%9C-%EC%8B%A4%ED%96%89%ED%95%B4%EB%B3%B4%EA%B8%B0)
+- **Vol 12.** [#12. 이벤트 수집 파이프라인을 분리한 이유](https://velog.io/@hoonyl/12.-%EC%9D%B4%EB%B2%A4%ED%8A%B8-%EC%88%98%EC%A7%91-%ED%8C%8C%EC%9D%B4%ED%94%84%EB%9D%BC%EC%9D%B8%EC%9D%84-%EB%B6%84%EB%A6%AC%ED%95%9C-%EC%9D%B4%EC%9C%A0)
 
 ---
 
