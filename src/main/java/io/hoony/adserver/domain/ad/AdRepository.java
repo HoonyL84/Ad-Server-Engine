@@ -13,4 +13,7 @@ public interface AdRepository extends JpaRepository<Ad, Long> {
 
     @Query("select a from Ad a join fetch a.advertiser")
     List<Ad> findAllWithAdvertiser();
+
+    @Query("select a.id from Ad a")
+    List<Long> findAllIds();
 }

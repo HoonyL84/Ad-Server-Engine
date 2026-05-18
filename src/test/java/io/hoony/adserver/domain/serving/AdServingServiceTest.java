@@ -44,10 +44,25 @@ class AdServingServiceTest {
         });
     }
 
+    private AdServingService createService(long dmpTimeoutMs, long candidateTimeoutMs) {
+        return new AdServingService(
+                userProfileClient,
+                candidateSearchService,
+                adMatcher,
+                java.util.Map.of("max-bid", adRanker),
+                "max-bid",
+                adBudgetService,
+                adServingMetrics,
+                executorService,
+                dmpTimeoutMs,
+                candidateTimeoutMs
+        );
+    }
+
     @Test
     @DisplayName("프로필과 후보가 정상일 때 타겟 광고를 반환한다.")
     void servesTargetedAdWhenProfileIsAvailable() {
-        AdServingService service = new AdServingService(userProfileClient, candidateSearchService, adMatcher, adRanker, adBudgetService, adServingMetrics, executorService, 30, 50);
+        AdServingService service = createService(30, 50);
         UserProfile profile = new UserProfile("1", "M", "1:11", 29, List.of("fashion"));
         AdDocument targeted = ad(1L, "M", "1:11", List.of("fashion"), "3000");
         AdDocument broad = ad(2L, "ALL", "0", List.of("finance"), "5000");
@@ -68,7 +83,7 @@ class AdServingServiceTest {
     @Test
     @DisplayName("프로필이 없으면 기본 후보로 fallback 한다.")
     void fallsBackWhenProfileIsMissing() {
-        AdServingService service = new AdServingService(userProfileClient, candidateSearchService, adMatcher, adRanker, adBudgetService, adServingMetrics, executorService, 30, 50);
+        AdServingService service = createService(30, 50);
         AdDocument broad = ad(2L, "ALL", "0", List.of("finance"), "5000");
 
         when(userProfileClient.getUserProfile("missing")).thenReturn(Optional.empty());
@@ -87,7 +102,7 @@ class AdServingServiceTest {
     @Test
     @DisplayName("프로필은 있지만 타겟에 맞는 후보가 없으면 기본 후보로 fallback 한다.")
     void fallsBackWhenTargetDoesNotMatch() {
-        AdServingService service = new AdServingService(userProfileClient, candidateSearchService, adMatcher, adRanker, adBudgetService, adServingMetrics, executorService, 30, 50);
+        AdServingService service = createService(30, 50);
         UserProfile profile = new UserProfile("1", "M", "1:11", 29, List.of("fashion"));
         AdDocument broad = ad(2L, "F", "2:21", List.of("interior"), "5000");
 
@@ -107,7 +122,7 @@ class AdServingServiceTest {
     @Test
     @DisplayName("DMP 조회가 timeout을 넘으면 기본 후보로 fallback 한다.")
     void fallsBackWhenDmpTimeouts() {
-        AdServingService service = new AdServingService(userProfileClient, candidateSearchService, adMatcher, adRanker, adBudgetService, adServingMetrics, executorService, 10, 50);
+        AdServingService service = createService(10, 50);
         AdDocument broad = ad(2L, "ALL", "0", List.of("finance"), "5000");
 
         when(userProfileClient.getUserProfile("slow")).thenAnswer(invocation -> {
@@ -129,7 +144,7 @@ class AdServingServiceTest {
     @Test
     @DisplayName("후보 조회가 timeout을 넘으면 candidate timeout으로 fallback 한다.")
     void fallsBackWhenCandidateSearchTimeouts() {
-        AdServingService service = new AdServingService(userProfileClient, candidateSearchService, adMatcher, adRanker, adBudgetService, adServingMetrics, executorService, 30, 10);
+        AdServingService service = createService(30, 10);
 
         when(userProfileClient.getUserProfile("1"))
                 .thenReturn(Optional.of(new UserProfile("1", "M", "1:11", 29, List.of("fashion"))));
@@ -150,7 +165,7 @@ class AdServingServiceTest {
     @Test
     @DisplayName("가장 높은 입찰가 후보의 예산이 없으면 다음 후보를 선택한다.")
     void skipsCandidateWhenBudgetIsExhausted() {
-        AdServingService service = new AdServingService(userProfileClient, candidateSearchService, adMatcher, adRanker, adBudgetService, adServingMetrics, executorService, 30, 50);
+        AdServingService service = createService(30, 50);
         UserProfile profile = new UserProfile("1", "M", "1:11", 29, List.of("fashion"));
         AdDocument expensive = ad(1L, "M", "1:11", List.of("fashion"), "5000");
         AdDocument available = ad(2L, "M", "1:11", List.of("fashion"), "3000");
@@ -172,7 +187,7 @@ class AdServingServiceTest {
     @Test
     @DisplayName("이미 소진 마커가 있는 광고는 예산 차감 전에 제외한다.")
     void skipsAlreadyExhaustedCandidateBeforeSpend() {
-        AdServingService service = new AdServingService(userProfileClient, candidateSearchService, adMatcher, adRanker, adBudgetService, adServingMetrics, executorService, 30, 50);
+        AdServingService service = createService(30, 50);
         UserProfile profile = new UserProfile("1", "M", "1:11", 29, List.of("fashion"));
         AdDocument exhausted = ad(1L, "M", "1:11", List.of("fashion"), "5000");
         AdDocument available = ad(2L, "M", "1:11", List.of("fashion"), "3000");
@@ -195,7 +210,7 @@ class AdServingServiceTest {
     @Test
     @DisplayName("모든 후보의 예산이 없으면 BUDGET_EXHAUSTED로 응답한다.")
     void returnsBudgetExhaustedWhenNoCandidateCanSpend() {
-        AdServingService service = new AdServingService(userProfileClient, candidateSearchService, adMatcher, adRanker, adBudgetService, adServingMetrics, executorService, 30, 50);
+        AdServingService service = createService(30, 50);
         UserProfile profile = new UserProfile("1", "M", "1:11", 29, List.of("fashion"));
         AdDocument candidate = ad(1L, "M", "1:11", List.of("fashion"), "5000");
 

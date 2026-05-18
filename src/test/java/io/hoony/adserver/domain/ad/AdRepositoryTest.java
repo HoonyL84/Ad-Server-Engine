@@ -18,7 +18,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @DataJpaTest
 @Import(JpaConfig.class)
-@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE) // 실제 로컬 DB(3306) 사용
+@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
 class AdRepositoryTest {
 
@@ -31,7 +31,6 @@ class AdRepositoryTest {
     @Test
     @DisplayName("광고주와 광고를 저장하고 JSON 형태의 타겟팅 컨텍스트가 정상적으로 저장되는지 확인한다.")
     void saveAndFindAd() {
-        // given
         Advertiser advertiser = Advertiser.builder()
                 .name("삼성전자")
                 .status(AdvertiserStatus.ACTIVE)
@@ -58,11 +57,9 @@ class AdRepositoryTest {
                 .targetContext(targetContext)
                 .build();
 
-        // when
         Ad savedAd = adRepository.save(ad);
         adRepository.flush();
 
-        // then
         Ad foundAd = adRepository.findByIdWithAdvertiser(savedAd.getId());
         assertThat(foundAd).isNotNull();
         assertThat(foundAd.getAdvertiser().getName()).isEqualTo("삼성전자");
@@ -77,7 +74,7 @@ class AdRepositoryTest {
     @Test
     @DisplayName("대량의 광고 데이터를 일괄 저장하고 전체 개수를 확인한다.")
     void saveMultipleAdsAndRetrieveThem() {
-        // given: 10명의 광고주에게 각각 10개씩, 총 100개의 광고를 생성한다.
+        long initialCount = adRepository.count();
         for (int i = 1; i <= 10; i++) {
             Advertiser advertiser = new Advertiser("광고주_" + i, AdvertiserStatus.ACTIVE);
             advertiserRepository.save(advertiser);
@@ -100,10 +97,8 @@ class AdRepositoryTest {
             }
         }
 
-        // when: 전체 광고 개수를 조회한다.
         long totalCount = adRepository.count();
 
-        // then: 정확히 100개가 저장되었는지 확인한다.
-        assertThat(totalCount).isEqualTo(100L);
+        assertThat(totalCount - initialCount).isEqualTo(100L);
     }
 }

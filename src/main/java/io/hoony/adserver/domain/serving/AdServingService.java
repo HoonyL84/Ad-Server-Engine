@@ -37,7 +37,8 @@ public class AdServingService {
             UserProfileClient userProfileClient,
             AdCandidateSearchService adCandidateSearchService,
             AdMatcher adMatcher,
-            AdRanker adRanker,
+            Map<String, AdRanker> adRankers,
+            @Value("${ad-server.serving.ranking-strategy:max-bid}") String rankingStrategy,
             AdBudgetService adBudgetService,
             AdServingMetrics adServingMetrics,
             ExecutorService executorService,
@@ -47,7 +48,14 @@ public class AdServingService {
         this.userProfileClient = userProfileClient;
         this.adCandidateSearchService = adCandidateSearchService;
         this.adMatcher = adMatcher;
-        this.adRanker = adRanker;
+
+        this.adRanker = adRankers.get(rankingStrategy);
+        if (this.adRanker == null) {
+            log.error("Unknown ranking strategy: {}. Available strategy beans: {}", rankingStrategy, adRankers.keySet());
+            throw new IllegalArgumentException("Unknown ranking strategy: " + rankingStrategy);
+        }
+        log.info("Initialized AdServingService with ranking strategy: {}", rankingStrategy);
+
         this.adBudgetService = adBudgetService;
         this.adServingMetrics = adServingMetrics;
         this.executorService = executorService;
