@@ -18,6 +18,8 @@ import java.util.concurrent.Executors;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class AdServingServiceTest {
@@ -29,6 +31,7 @@ class AdServingServiceTest {
     private final AdBudgetService adBudgetService = mock(AdBudgetService.class);
     private final AdServingMetrics adServingMetrics = new AdServingMetrics(new SimpleMeterRegistry());
     private final ExecutorService executorService = Executors.newVirtualThreadPerTaskExecutor();
+    private final SimpleCircuitBreaker simpleCircuitBreaker = mock(SimpleCircuitBreaker.class);
 
     @AfterEach
     void tearDown() {
@@ -37,6 +40,7 @@ class AdServingServiceTest {
 
     @org.junit.jupiter.api.BeforeEach
     void setUp() {
+        when(simpleCircuitBreaker.allowRequest()).thenReturn(true);
         when(adBudgetService.filterExhausted(any())).thenAnswer(invocation -> {
             List<AdDocument> ads = invocation.getArgument(0);
             if (ads == null) return List.of();
@@ -54,6 +58,7 @@ class AdServingServiceTest {
                 adBudgetService,
                 adServingMetrics,
                 executorService,
+                simpleCircuitBreaker,
                 dmpTimeoutMs,
                 candidateTimeoutMs
         );
@@ -225,6 +230,26 @@ class AdServingServiceTest {
         assertThat(result.selectedAd()).isNull();
         assertThat(result.candidateCount()).isEqualTo(1);
         assertThat(result.matchedCount()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("서킷 브레이커가 열려있으면 DMP 호출 없이 즉시 DMP_CIRCUIT_OPEN으로 fallback 한다.")
+    void fallsBackWhenCircuitBreakerIsOpened() {
+        AdServingService service = createService(30, 50);
+        AdDocument broad = ad(2L, "ALL", "0", List.of("finance"), "5000");
+
+        when(simpleCircuitBreaker.allowRequest()).thenReturn(false);
+        when(candidateSearchService.searchCandidates("home")).thenReturn(List.of(broad));
+        when(adBudgetService.trySpend(any())).thenReturn(true);
+
+        AdServingResult result = service.serve("some-user", "home");
+
+        assertThat(result.fallback()).isTrue();
+        assertThat(result.fallbackReason()).isEqualTo(ServingFallbackReason.DMP_CIRCUIT_OPEN);
+        assertThat(result.selectedAd().getId()).isEqualTo(2L);
+        assertThat(result.candidateCount()).isEqualTo(1);
+        assertThat(result.matchedCount()).isZero();
+        verify(userProfileClient, never()).getUserProfile(any());
     }
 
     private AdDocument ad(Long id, String gender, String locationId, List<String> tags, String bid) {

@@ -9,6 +9,8 @@ public interface AdBudgetService {
 
     boolean isExhausted(AdDocument ad);
 
+    void evictCache(Long adId);
+
     default List<AdDocument> filterExhausted(List<AdDocument> ads) {
         if (ads == null || ads.isEmpty()) {
             return List.of();

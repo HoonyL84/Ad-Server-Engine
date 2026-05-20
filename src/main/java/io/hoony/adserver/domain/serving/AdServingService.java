@@ -1,18 +1,17 @@
 package io.hoony.adserver.domain.serving;
 
+import io.hoony.adserver.config.MdcTraceUtils;
 import io.hoony.adserver.domain.ad.search.AdDocument;
 import io.hoony.adserver.domain.user.profile.UserProfile;
 import io.hoony.adserver.domain.user.profile.UserProfileClient;
 import io.micrometer.core.instrument.Timer;
 import lombok.extern.slf4j.Slf4j;
-import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
@@ -30,6 +29,7 @@ public class AdServingService {
     private final AdBudgetService adBudgetService;
     private final AdServingMetrics adServingMetrics;
     private final ExecutorService executorService;
+    private final SimpleCircuitBreaker simpleCircuitBreaker;
     private final long dmpTimeoutMs;
     private final long candidateTimeoutMs;
 
@@ -42,6 +42,7 @@ public class AdServingService {
             AdBudgetService adBudgetService,
             AdServingMetrics adServingMetrics,
             ExecutorService executorService,
+            SimpleCircuitBreaker simpleCircuitBreaker,
             @Value("${ad-server.serving.dmp-timeout-ms:30}") long dmpTimeoutMs,
             @Value("${ad-server.serving.candidate-timeout-ms:50}") long candidateTimeoutMs
     ) {
@@ -59,6 +60,7 @@ public class AdServingService {
         this.adBudgetService = adBudgetService;
         this.adServingMetrics = adServingMetrics;
         this.executorService = executorService;
+        this.simpleCircuitBreaker = simpleCircuitBreaker;
         this.dmpTimeoutMs = dmpTimeoutMs;
         this.candidateTimeoutMs = candidateTimeoutMs;
     }
@@ -73,10 +75,17 @@ public class AdServingService {
     private AdServingResult doServe(String userId, String slotId) {
         try {
             log.debug("Serving started. userId={}, slotId={}", userId, slotId);
-            Future<Optional<UserProfile>> profileFuture =
-                    executorService.submit(withTraceContext(() -> userProfileClient.getUserProfile(userId)));
+            
+            boolean allowDmp = simpleCircuitBreaker.allowRequest();
+            Future<Optional<UserProfile>> profileFuture = null;
+            if (allowDmp) {
+                profileFuture = executorService.submit(MdcTraceUtils.withTraceContext(() -> userProfileClient.getUserProfile(userId)));
+            } else {
+                log.debug("DMP request blocked by Circuit Breaker. userId={}", userId);
+            }
+
             Future<List<AdDocument>> candidatesFuture =
-                    executorService.submit(withTraceContext(() -> adCandidateSearchService.searchCandidates(slotId)));
+                    executorService.submit(MdcTraceUtils.withTraceContext(() -> adCandidateSearchService.searchCandidates(slotId)));
 
             CandidateResult candidateResult = getCandidatesWithTimeout(candidatesFuture);
             if (candidateResult.reason.isPresent()) {
@@ -91,7 +100,7 @@ public class AdServingService {
                 return new AdServingResult(null, true, ServingFallbackReason.NO_CANDIDATE, 0, 0);
             }
 
-            ProfileResult profileResult = getProfileWithTimeout(profileFuture);
+            ProfileResult profileResult = getProfileWithTimeout(profileFuture, !allowDmp);
             log.debug("Profile lookup completed. userId={}, reason={}", userId, profileResult.reason);
 
             if (profileResult.reason == ServingFallbackReason.NONE) {
@@ -159,44 +168,30 @@ public class AdServingService {
         }
     }
 
-    private ProfileResult getProfileWithTimeout(Future<Optional<UserProfile>> profileFuture) {
+    private ProfileResult getProfileWithTimeout(Future<Optional<UserProfile>> profileFuture, boolean cbBlocked) {
+        if (cbBlocked) {
+            return new ProfileResult(Optional.empty(), ServingFallbackReason.DMP_CIRCUIT_OPEN);
+        }
         try {
             Optional<UserProfile> profile = profileFuture.get(dmpTimeoutMs, TimeUnit.MILLISECONDS);
             if (profile.isEmpty()) {
+                simpleCircuitBreaker.recordSuccess();
                 return new ProfileResult(Optional.empty(), ServingFallbackReason.PROFILE_NOT_FOUND);
             }
+            simpleCircuitBreaker.recordSuccess();
             return new ProfileResult(profile, ServingFallbackReason.NONE);
         } catch (TimeoutException e) {
             profileFuture.cancel(true);
+            simpleCircuitBreaker.recordFailure();
             return new ProfileResult(Optional.empty(), ServingFallbackReason.DMP_TIMEOUT);
         } catch (ExecutionException e) {
+            simpleCircuitBreaker.recordFailure();
             return new ProfileResult(Optional.empty(), ServingFallbackReason.DMP_ERROR);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+            simpleCircuitBreaker.recordFailure();
             return new ProfileResult(Optional.empty(), ServingFallbackReason.DMP_ERROR);
         }
-    }
-
-    private <T> Callable<T> withTraceContext(Callable<T> task) {
-        Map<String, String> parentContext = MDC.getCopyOfContextMap();
-
-        return () -> {
-            Map<String, String> previousContext = MDC.getCopyOfContextMap();
-            setMdcContext(parentContext);
-            try {
-                return task.call();
-            } finally {
-                setMdcContext(previousContext);
-            }
-        };
-    }
-
-    private void setMdcContext(Map<String, String> context) {
-        if (context == null || context.isEmpty()) {
-            MDC.clear();
-            return;
-        }
-        MDC.setContextMap(context);
     }
 
     private record ProfileResult(Optional<UserProfile> profile, ServingFallbackReason reason) {

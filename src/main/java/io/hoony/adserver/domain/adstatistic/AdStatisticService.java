@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -128,22 +129,20 @@ public class AdStatisticService {
 
         Map<Long, AdStatistic> existingStats = adStatisticRepository.findAllById(adIds).stream()
                 .collect(Collectors.toMap(AdStatistic::getAdId, Function.identity()));
+        Map<Long, AdStatisticDto> redisStats = getRedisStatistics(adIds);
         List<AdStatistic> statsToSave = new ArrayList<>();
         for (Long adId : adIds) {
-            String impKey = "ad:stat:imp:" + adId;
-            String clkKey = "ad:stat:clk:" + adId;
-
-            String impVal = redisTemplate.opsForValue().get(impKey);
-            String clkVal = redisTemplate.opsForValue().get(clkKey);
-
-            if (impVal != null || clkVal != null) {
+            AdStatisticDto redisStat = redisStats.get(adId);
+            if (redisStat != null) {
                 AdStatistic existing = existingStats.getOrDefault(adId, AdStatistic.of(adId, 0L, 0L));
-                long impressions = impVal != null
-                        ? parseLongOrDefault(impVal, existing.getImpressionCount())
-                        : existing.getImpressionCount();
-                long clicks = clkVal != null
-                        ? parseLongOrDefault(clkVal, existing.getClickCount())
-                        : existing.getClickCount();
+                long impressions = redisStat.impressions();
+                long clicks = redisStat.clicks();
+                if (impressions < 0) {
+                    impressions = existing.getImpressionCount();
+                }
+                if (clicks < 0) {
+                    clicks = existing.getClickCount();
+                }
                 statsToSave.add(AdStatistic.of(adId, impressions, clicks));
             }
         }
@@ -157,28 +156,37 @@ public class AdStatisticService {
     @Scheduled(cron = "${ad-server.serving.realign-cron:0 0 3 * * *}")
     @Transactional
     public void realignStatisticsFromEventLedger() {
-        log.info("Starting Ad statistics realign batch from physical event ledger...");
+        log.info("Starting Ad statistics realign batch from physical event ledger using bulk query...");
         List<Long> adIds = adRepository.findAllIds();
         if (adIds.isEmpty()) {
             return;
         }
 
-        List<AdStatistic> statsToSave = new ArrayList<>();
-        for (Long adId : adIds) {
-            long realImp = adEventRepository.countByAdIdAndEventType(adId, AdEventType.IMPRESSION);
-            long realClk = adEventRepository.countByAdIdAndEventType(adId, AdEventType.CLICK);
+        List<AdEventCountDto> aggregated = adEventRepository.countAllEventsGrouped();
 
-            String impKey = "ad:stat:imp:" + adId;
-            String clkKey = "ad:stat:clk:" + adId;
-            redisTemplate.opsForValue().set(impKey, String.valueOf(realImp));
-            redisTemplate.opsForValue().set(clkKey, String.valueOf(realClk));
+        Map<Long, Map<AdEventType, Long>> eventMap = aggregated.stream()
+                .collect(Collectors.groupingBy(
+                        AdEventCountDto::adId,
+                        Collectors.toMap(AdEventCountDto::eventType, AdEventCountDto::count, (v1, v2) -> v1)
+                ));
+
+        List<AdStatistic> statsToSave = new ArrayList<>();
+        Map<String, String> redisUpdates = new HashMap<>();
+        for (Long adId : adIds) {
+            Map<AdEventType, Long> counts = eventMap.getOrDefault(adId, Map.of());
+            long realImp = counts.getOrDefault(AdEventType.IMPRESSION, 0L);
+            long realClk = counts.getOrDefault(AdEventType.CLICK, 0L);
+
+            redisUpdates.put("ad:stat:imp:" + adId, String.valueOf(realImp));
+            redisUpdates.put("ad:stat:clk:" + adId, String.valueOf(realClk));
 
             statsToSave.add(AdStatistic.of(adId, realImp, realClk));
         }
 
         if (!statsToSave.isEmpty()) {
+            redisTemplate.opsForValue().multiSet(redisUpdates);
             adStatisticRepository.saveAll(statsToSave);
-            log.info("Successfully realigned and saved {} Ad statistics from physical ledger.", statsToSave.size());
+            log.info("Successfully realigned and saved {} Ad statistics from event ledger.", statsToSave.size());
         }
     }
 
@@ -192,5 +200,32 @@ public class AdStatisticService {
             log.warn("Failed to parse Long from Redis value: {}", value);
             return defaultValue;
         }
+    }
+
+    private Map<Long, AdStatisticDto> getRedisStatistics(List<Long> adIds) {
+        List<String> keys = new ArrayList<>();
+        for (Long adId : adIds) {
+            keys.add("ad:stat:imp:" + adId);
+            keys.add("ad:stat:clk:" + adId);
+        }
+
+        List<String> values = redisTemplate.opsForValue().multiGet(keys);
+        if (values == null) {
+            return Map.of();
+        }
+
+        Map<Long, AdStatisticDto> result = new HashMap<>();
+        for (int i = 0; i < adIds.size(); i++) {
+            String impVal = values.get(2 * i);
+            String clkVal = values.get(2 * i + 1);
+            if (impVal == null && clkVal == null) {
+                continue;
+            }
+
+            long impressions = impVal != null ? parseLongOrDefault(impVal, 0L) : -1L;
+            long clicks = clkVal != null ? parseLongOrDefault(clkVal, 0L) : -1L;
+            result.put(adIds.get(i), new AdStatisticDto(impressions, clicks));
+        }
+        return result;
     }
 }

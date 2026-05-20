@@ -5,6 +5,6 @@ import lombok.RequiredArgsConstructor;
 
 @Getter
 @RequiredArgsConstructor
-public class AdCreatedEvent {
+public class AdUpdatedEvent {
     private final AdEventPayload payload;
 }

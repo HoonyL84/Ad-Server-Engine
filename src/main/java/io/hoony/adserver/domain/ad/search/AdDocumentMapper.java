@@ -1,6 +1,7 @@
 package io.hoony.adserver.domain.ad.search;
 
 import io.hoony.adserver.domain.ad.Ad;
+import io.hoony.adserver.domain.ad.event.AdEventPayload;
 import org.springframework.stereotype.Component;
 
 import java.util.Arrays;
@@ -24,6 +25,24 @@ public class AdDocumentMapper {
                 .targetLocationId(ad.getTargetLocationId())
                 .interestTags(parseTags(ad.getTargetInterestTags()))
                 .targetContext(ad.getTargetContext())
+                .build();
+    }
+
+    public AdDocument toDocument(AdEventPayload payload) {
+        return AdDocument.builder()
+                .id(payload.id())
+                .advertiserId(payload.advertiserId())
+                .title(payload.title())
+                .imageUrl(payload.imageUrl())
+                .clickUrl(payload.clickUrl())
+                .maxBid(payload.maxBid())
+                .totalBudget(payload.totalBudget())
+                .spentAmount(payload.spentAmount())
+                .status(payload.status())
+                .targetGender(payload.targetGender())
+                .targetLocationId(payload.targetLocationId())
+                .interestTags(parseTags(payload.targetInterestTags()))
+                .targetContext(payload.targetContext())
                 .build();
     }
 

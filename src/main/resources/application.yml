@@ -15,6 +15,12 @@ spring:
     username: root
     password: root
     driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 10
+      connection-timeout: 250 # local fail-fast baseline; tune with real workload metrics
+      idle-timeout: 600000
+      max-lifetime: 1800000
 
   jpa:
     hibernate:
@@ -28,11 +34,15 @@ spring:
 
   elasticsearch:
     uris: http://localhost:9200
+    connection-timeout: 100ms
+    socket-timeout: 150ms
 
   data:
     redis:
       host: localhost
       port: 6379
+      timeout: 100ms
+      connect-timeout: 100ms
 
   kafka:
     bootstrap-servers: localhost:9092

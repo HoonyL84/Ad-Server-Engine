@@ -102,4 +102,11 @@ public class Ad extends BaseTimeEntity {
     public void updateTargetContext(Map<String, Object> newContext) {
         this.targetContext = newContext;
     }
+
+    public void updateTotalBudget(BigDecimal newBudget) {
+        if (newBudget == null || newBudget.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("Budget cannot be negative or null");
+        }
+        this.totalBudget = newBudget;
+    }
 }

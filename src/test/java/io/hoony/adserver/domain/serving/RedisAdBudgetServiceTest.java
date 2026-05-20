@@ -17,14 +17,22 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+
+import org.junit.jupiter.api.BeforeEach;
 
 class RedisAdBudgetServiceTest {
 
     private final StringRedisTemplate redisTemplate = mock(StringRedisTemplate.class);
     private final ValueOperations<String, String> valueOperations = mock(ValueOperations.class);
     private final RedisAdBudgetService service = new RedisAdBudgetService(redisTemplate);
+
+    @BeforeEach
+    void setUp() {
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+    }
 
     @Test
     @DisplayName("Redis 차감 결과가 0 이상이면 예산 사용 성공으로 본다.")
@@ -34,7 +42,9 @@ class RedisAdBudgetServiceTest {
                 anyList(),
                 eq("10"),
                 eq("10000"),
-                eq("300")
+                eq("300"),
+                any(),
+                any()
         )).thenReturn(900L);
 
         boolean result = service.trySpend(ad("1000", "10000", "0"));
@@ -60,7 +70,9 @@ class RedisAdBudgetServiceTest {
                 anyList(),
                 eq("10"),
                 eq("10000"),
-                eq("300")
+                eq("300"),
+                any(),
+                any()
         );
     }
 
@@ -72,7 +84,9 @@ class RedisAdBudgetServiceTest {
                 anyList(),
                 eq("10"),
                 eq("10000"),
-                eq("300")
+                eq("300"),
+                any(),
+                any()
         )).thenReturn(-1L);
 
         boolean result = service.trySpend(ad("1000", "10000", "0"));
@@ -81,18 +95,14 @@ class RedisAdBudgetServiceTest {
     }
 
     @Test
-    @DisplayName("남은 예산이 없으면 소진 마커를 남기고 실패로 본다.")
+    @DisplayName("문서 기준 남은 예산이 없으면 Redis 소진 마커를 다시 쓰지 않고 실패로 본다.")
     void returnsFalseWhenInitialBudgetIsEmpty() {
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
 
         boolean result = service.trySpend(ad("1000", "10000", "10000"));
 
         assertThat(result).isFalse();
-        verify(valueOperations).set(
-                eq("ad:budget:1:exhausted"),
-                eq("1"),
-                eq(Duration.ofSeconds(300))
-        );
+        verify(valueOperations, never()).set(any(), any(), any(Duration.class));
     }
 
     @Test

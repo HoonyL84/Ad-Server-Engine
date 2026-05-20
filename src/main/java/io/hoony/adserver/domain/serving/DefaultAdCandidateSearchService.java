@@ -39,7 +39,20 @@ public class DefaultAdCandidateSearchService implements AdCandidateSearchService
             return current.candidates();
         }
 
-        lock.lock();
+        boolean acquired;
+        try {
+            acquired = lock.tryLock(10, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.warn("Candidate search tryLock interrupted. Returning cached candidates.");
+            return current.candidates();
+        }
+
+        if (!acquired) {
+            log.warn("Candidate search lock acquisition timed out (10ms). Returning cached candidates (size={}).", current.candidates().size());
+            return current.candidates();
+        }
+
         try {
             current = cachedCandidates;
             if (current.isValid(now)) {

@@ -2,6 +2,7 @@ package io.hoony.adserver.domain.adevent;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
@@ -9,6 +10,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Service
@@ -16,15 +18,19 @@ import java.util.concurrent.CompletableFuture;
 public class AdEventService {
 
     private static final String EVENT_DUP_KEY_PREFIX = "event:dup:";
+    private static final Duration DUPLICATE_GUARD_TTL = Duration.ofMinutes(10);
 
     private final StringRedisTemplate redisTemplate;
     private final KafkaTemplate<String, Object> kafkaTemplate;
     private final AdEventMetrics adEventMetrics;
 
+    @Value("${ad-server.events.kafka-publish-timeout-ms:50}")
+    private long kafkaPublishTimeoutMs;
+
     public AdEventResult collect(AdEventType eventType, AdEventRequest request) {
         String dupKey = EVENT_DUP_KEY_PREFIX + request.eventId();
 
-        Boolean isNew = redisTemplate.opsForValue().setIfAbsent(dupKey, "1", Duration.ofHours(24));
+        Boolean isNew = redisTemplate.opsForValue().setIfAbsent(dupKey, "1", DUPLICATE_GUARD_TTL);
 
         if (Boolean.FALSE.equals(isNew)) {
             log.debug("Duplicate event detected by Redis: eventId={}", request.eventId());
@@ -37,16 +43,7 @@ public class AdEventService {
             CompletableFuture<SendResult<String, Object>> sendResult =
                     kafkaTemplate.send(topic, request.eventId(), request);
 
-            sendResult.whenComplete((result, exception) -> {
-                if (exception == null) {
-                    return;
-                }
-
-                log.error("Failed to publish event to Kafka: eventId={}, error={}",
-                        request.eventId(), exception.getMessage(), exception);
-                adEventMetrics.recordFailure(eventType, request.slotId());
-                redisTemplate.delete(dupKey);
-            });
+            sendResult.get(kafkaPublishTimeoutMs, TimeUnit.MILLISECONDS);
 
             adEventMetrics.record(eventType, request.slotId(), false);
             return new AdEventResult(request.eventId(), eventType, false);

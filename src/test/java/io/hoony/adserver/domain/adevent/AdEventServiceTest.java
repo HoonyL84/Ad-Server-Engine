@@ -35,7 +35,7 @@ class AdEventServiceTest {
     }
 
     @Test
-    @DisplayName("새 이벤트를 캐싱하고 Kafka로 비동기 발행하며 duplicate=false를 반환한다.")
+    @DisplayName("새 이벤트를 캐싱하고 Kafka 발행 확인 후 duplicate=false를 반환한다.")
     void collectsNewEvent() {
         AdEventRequest request = request("event-1");
 
@@ -49,6 +49,7 @@ class AdEventServiceTest {
         assertThat(result.eventId()).isEqualTo("event-1");
         assertThat(result.eventType()).isEqualTo(AdEventType.IMPRESSION);
         assertThat(result.duplicate()).isFalse();
+        verify(valueOperations).setIfAbsent("event:dup:event-1", "1", Duration.ofMinutes(10));
         verify(kafkaTemplate).send(eq("ad-impressions"), eq("event-1"), eq(request));
     }
 
@@ -85,7 +86,7 @@ class AdEventServiceTest {
     }
 
     @Test
-    @DisplayName("Kafka 발행 결과가 비동기로 실패하면 Redis 중복 캐시를 제거한다.")
+    @DisplayName("Kafka 발행 결과가 실패하면 Redis 중복 캐시를 제거하고 예외를 전파한다.")
     void evictsDuplicateCacheWhenKafkaPublishFailsAsynchronously() {
         AdEventRequest request = request("event-1");
 
@@ -94,9 +95,10 @@ class AdEventServiceTest {
         when(kafkaTemplate.send(eq("ad-impressions"), eq("event-1"), eq(request)))
                 .thenReturn(CompletableFuture.failedFuture(new RuntimeException("broker ack failed")));
 
-        AdEventResult result = adEventService.collect(AdEventType.IMPRESSION, request);
+        assertThatThrownBy(() -> adEventService.collect(AdEventType.IMPRESSION, request))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("Kafka publish failure");
 
-        assertThat(result.duplicate()).isFalse();
         verify(redisTemplate).delete("event:dup:event-1");
     }
 

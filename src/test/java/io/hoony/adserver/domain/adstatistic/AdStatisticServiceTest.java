@@ -2,6 +2,7 @@ package io.hoony.adserver.domain.adstatistic;
 
 import io.hoony.adserver.domain.ad.AdRepository;
 import io.hoony.adserver.domain.adevent.AdEventRepository;
+import io.hoony.adserver.domain.adevent.AdEventType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -130,10 +131,12 @@ class AdStatisticServiceTest {
                 AdStatistic.of(2L, 18000L, 500L)
         ));
 
-        when(valueOperations.get("ad:stat:imp:1")).thenReturn("10000");
-        when(valueOperations.get("ad:stat:clk:1")).thenReturn("250");
-        when(valueOperations.get("ad:stat:imp:2")).thenReturn("20000");
-        when(valueOperations.get("ad:stat:clk:2")).thenReturn("600");
+        when(valueOperations.multiGet(List.of(
+                "ad:stat:imp:1",
+                "ad:stat:clk:1",
+                "ad:stat:imp:2",
+                "ad:stat:clk:2"
+        ))).thenReturn(List.of("10000", "250", "20000", "600"));
 
         adStatisticService.syncToDatabase();
 
@@ -162,8 +165,10 @@ class AdStatisticServiceTest {
                 AdStatistic.of(1L, 9000L, 200L)
         ));
 
-        when(valueOperations.get("ad:stat:imp:1")).thenReturn("10000");
-        when(valueOperations.get("ad:stat:clk:1")).thenReturn(null);
+        when(valueOperations.multiGet(List.of(
+                "ad:stat:imp:1",
+                "ad:stat:clk:1"
+        ))).thenReturn(java.util.Arrays.asList("10000", null));
 
         adStatisticService.syncToDatabase();
 
@@ -173,5 +178,44 @@ class AdStatisticServiceTest {
         AdStatistic stat = captor.getValue().get(0);
         assertThat(stat.getImpressionCount()).isEqualTo(10000L);
         assertThat(stat.getClickCount()).isEqualTo(200L);
+    }
+
+    @Test
+    @DisplayName("이벤트 원장 보정 배치는 GROUP BY 집계 결과로 Redis와 DB 통계를 다시 맞춘다")
+    @SuppressWarnings("unchecked")
+    void shouldRealignStatisticsFromGroupedEventLedger() {
+        List<Long> adIds = List.of(1L, 2L);
+        when(adRepository.findAllIds()).thenReturn(adIds);
+        when(adEventRepository.countAllEventsGrouped()).thenReturn(List.of(
+                new AdEventCountDto(1L, AdEventType.IMPRESSION, 10L),
+                new AdEventCountDto(1L, AdEventType.CLICK, 2L),
+                new AdEventCountDto(2L, AdEventType.IMPRESSION, 5L)
+        ));
+
+        adStatisticService.realignStatisticsFromEventLedger();
+
+        verify(valueOperations).multiSet(java.util.Map.of(
+                "ad:stat:imp:1", "10",
+                "ad:stat:clk:1", "2",
+                "ad:stat:imp:2", "5",
+                "ad:stat:clk:2", "0"
+        ));
+
+        ArgumentCaptor<List<AdStatistic>> captor = ArgumentCaptor.forClass(List.class);
+        verify(adStatisticRepository).saveAll(captor.capture());
+
+        List<AdStatistic> stats = captor.getValue();
+        assertThat(stats).hasSize(2);
+
+        AdStatistic stat1 = stats.stream().filter(s -> s.getAdId().equals(1L)).findFirst().orElseThrow();
+        assertThat(stat1.getImpressionCount()).isEqualTo(10L);
+        assertThat(stat1.getClickCount()).isEqualTo(2L);
+
+        AdStatistic stat2 = stats.stream().filter(s -> s.getAdId().equals(2L)).findFirst().orElseThrow();
+        assertThat(stat2.getImpressionCount()).isEqualTo(5L);
+        assertThat(stat2.getClickCount()).isZero();
+
+        verify(adEventRepository).countAllEventsGrouped();
+        verify(adEventRepository, never()).countByAdIdAndEventType(any(), any());
     }
 }
