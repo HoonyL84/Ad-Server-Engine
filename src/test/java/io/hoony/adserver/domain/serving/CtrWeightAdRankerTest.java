@@ -32,9 +32,11 @@ class CtrWeightAdRankerTest {
         AdDocument ad2 = createAdDocument(2L, 2000);
         AdDocument ad3 = createAdDocument(3L, 3000);
 
-        when(adStatisticService.getStatistic(1L)).thenReturn(new AdStatisticDto(10000, 200));
-        when(adStatisticService.getStatistic(2L)).thenReturn(new AdStatisticDto(1000, 5));
-        when(adStatisticService.getStatistic(3L)).thenReturn(new AdStatisticDto(50000, 100));
+        when(adStatisticService.getStatistics(anyList())).thenReturn(java.util.Map.of(
+                1L, new AdStatisticDto(10000, 200),
+                2L, new AdStatisticDto(1000, 5),
+                3L, new AdStatisticDto(50000, 100)
+        ));
 
         List<AdDocument> candidates = List.of(ad1, ad2, ad3);
 
@@ -52,8 +54,10 @@ class CtrWeightAdRankerTest {
         AdDocument ad1 = createAdDocument(1L, 1000);
         AdDocument ad2 = createAdDocument(2L, 2000);
 
-        when(adStatisticService.getStatistic(1L)).thenReturn(new AdStatisticDto(10000, 200));
-        when(adStatisticService.getStatistic(2L)).thenReturn(new AdStatisticDto(1000, 5));
+        when(adStatisticService.getStatistics(anyList())).thenReturn(java.util.Map.of(
+                1L, new AdStatisticDto(10000, 200),
+                2L, new AdStatisticDto(1000, 5)
+        ));
 
         List<AdDocument> candidates = List.of(ad1, ad2);
 

@@ -34,8 +34,16 @@ public class CtrWeightAdRanker implements AdRanker {
         if (candidates == null || candidates.isEmpty()) {
             return List.of();
         }
+
+        List<Long> adIds = candidates.stream().map(AdDocument::getId).toList();
+        java.util.Map<Long, AdStatisticDto> statsMap = adStatisticService.getStatistics(adIds);
+
         return candidates.stream()
-                .sorted(Comparator.comparingDouble(this::calculateScore).reversed())
+                .sorted((ad1, ad2) -> {
+                    double score1 = calculateScoreWithMap(ad1, statsMap);
+                    double score2 = calculateScoreWithMap(ad2, statsMap);
+                    return Double.compare(score2, score1);
+                })
                 .toList();
     }
 
@@ -44,9 +52,9 @@ public class CtrWeightAdRanker implements AdRanker {
         return rank(candidates).stream().findFirst();
     }
 
-    private double calculateScore(AdDocument ad) {
+    private double calculateScoreWithMap(AdDocument ad, java.util.Map<Long, AdStatisticDto> statsMap) {
         double bid = ad.getMaxBid() == null ? 0.0 : ad.getMaxBid().doubleValue();
-        AdStatisticDto stat = adStatisticService.getStatistic(ad.getId());
+        AdStatisticDto stat = statsMap.getOrDefault(ad.getId(), new AdStatisticDto(0L, 0L));
         double ctr = stat.getSmoothedCtr(alpha, beta);
         double score = bid * ctr;
         log.debug("Ad ranker calculated score: adId={}, bid={}, impressions={}, clicks={}, smoothedCtr={}, score={}",

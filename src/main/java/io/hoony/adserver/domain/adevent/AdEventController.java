@@ -1,5 +1,7 @@
 package io.hoony.adserver.domain.adevent;
 
+import io.hoony.adserver.domain.ad.Ad;
+import io.hoony.adserver.domain.ad.AdRepository;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
@@ -18,6 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdEventController {
 
     private final AdEventService adEventService;
+    private final AdRepository adRepository;
 
     @PostMapping(value = "/impressions", consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<AdEventResponse> collectImpression(@Valid @RequestBody AdEventRequest request) {
@@ -52,16 +55,27 @@ public class AdEventController {
             @RequestParam String slotId,
             @RequestParam(required = false) String landingUrl
     ) {
-        AdEventResult result = adEventService.collect(
-                AdEventType.CLICK,
-                new AdEventRequest(eventId, requestId, adId, userId, slotId, landingUrl)
-        );
+        String safeLandingUrl = adRepository.findById(adId)
+                .map(Ad::getClickUrl)
+                .orElse(null);
 
-        if (landingUrl == null || landingUrl.isBlank()) {
-            return ResponseEntity.ok(toResponse(result));
+        if (landingUrl != null && !landingUrl.isBlank()) {
+            if (safeLandingUrl == null || safeLandingUrl.isBlank()) {
+                // Open Redirect 방지: 매핑된 공식 URL이 없는 경우 차단
+                return ResponseEntity.badRequest().body("Invalid adId or missing landing URL for redirection.");
+            }
+            adEventService.collect(
+                    AdEventType.CLICK,
+                    new AdEventRequest(eventId, requestId, adId, userId, slotId, safeLandingUrl)
+            );
+            return new RedirectView(safeLandingUrl);
         }
 
-        return new RedirectView(landingUrl);
+        AdEventResult result = adEventService.collect(
+                AdEventType.CLICK,
+                new AdEventRequest(eventId, requestId, adId, userId, slotId, null)
+        );
+        return ResponseEntity.ok(toResponse(result));
     }
 
     private AdEventResponse toResponse(AdEventResult result) {

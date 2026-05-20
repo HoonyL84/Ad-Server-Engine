@@ -35,6 +35,7 @@ public class AdEventConsumer {
             log.warn("Duplicate event ignored in consumer: eventId={}", request.eventId());
         } catch (Exception e) {
             log.error("Failed to save event in consumer: eventId={}, error={}", request.eventId(), e.getMessage(), e);
+            throw new RuntimeException("Transient DB save error - rollback offset for retry", e);
         }
     }
 

@@ -92,6 +92,13 @@
 - **Click Redirect**: 클릭 이벤트 수집 후 광고주 landing URL로 redirect 처리
 - **Event Metrics**: impression / click / duplicate / failure rate를 Prometheus 지표로 노출
 
+#### 13. CTR Feedback Loop (Step 13)
+- **Real-time Ingestion**: Kafka Consumer 저장 직후 Redis 실시간 노출/클릭 카운팅 반영 (`ad:stat:imp:{adId}`, `ad:stat:clk:{adId}`)
+- **Warm-up & Preservation**: Redis 캐시 미스 시 DB(`ad_statistic`)에서 보완하며, 벌크 조회 시에도 Redis의 기존 부분 캐시 카운팅이 DB 값에 의해 유실 및 덮어쓰기 되지 않도록 보존 처리
+- **Smoothed CTR Calculation**: 극소 표본 편향 방지를 위해 스무딩 계산식 적용 `(clicks + alpha) / (impressions + beta)`
+- **CTR-weight Ranking**: `CtrWeightAdRanker`를 통해 `maxBid * smoothedCtr` 방식의 랭킹 선택 가능 설계 (기본 maxBid 전략과 다형성 스위칭 가능)
+- **Data Realign Batch**: Kafka DB 적재 후 Redis 카운팅 실패 엣지케이스의 불일치를 새벽 3시 배치(`realignStatisticsFromEventLedger()`)로 물리적 이벤트 원장 기반 보정 경로 마련
+
 ---
 
 ## Key Features
@@ -148,6 +155,7 @@ Alert rule은 Prometheus의 `Alerts` 화면에서 확인할 수 있습니다.
 - **Vol 10.** [#10. 문제가 보였을 때 요청을 따라갈 수 있게 만들기](https://velog.io/@hoonyl/10.-%EB%AC%B8%EC%A0%9C%EA%B0%80-%EB%B3%B4%EC%98%80%EC%9D%84-%EB%95%8C-%EC%9A%94%EC%B2%AD%EC%9D%84-%EB%94%B0%EB%9D%BC%EA%B0%88-%EC%88%98-%EC%9E%88%EA%B2%8C-%EB%A7%8C%EB%93%A4%EA%B8%B0)
 - **Vol 11.** [#11. 광고 서버를 K8s 위에서 실행해보기](https://velog.io/@hoonyl/11.-%EA%B4%91%EA%B3%A0-%EC%84%9C%EB%B2%84%EB%A5%BC-K8s-%EC%9C%84%EC%97%90%EC%84%9C-%EC%8B%A4%ED%96%89%ED%95%B4%EB%B3%B4%EA%B8%B0)
 - **Vol 12.** [#12. 이벤트 수집 파이프라인을 분리한 이유](https://velog.io/@hoonyl/12.-%EC%9D%B4%EB%B2%A4%ED%8A%B8-%EC%88%98%EC%A7%91-%ED%8C%8C%EC%9D%B4%ED%94%84%EB%9D%BC%EC%9D%B8%EC%9D%84-%EB%B6%84%EB%A6%AC%ED%95%9C-%EC%9D%B4%EC%9C%A0)
+- **Vol 13.** [#13. CTR 집계와 랭킹 확장 기반 만들기](https://velog.io/@hoonyl/13.-CTR-%EC%A7%91%EA%B3%84%EC%99%80-%EB%9E%AD%ED%82%B9-%ED%99%95%EC%9E%A5-%EA%B8%B0%EB%B0%98-%EB%A7%8C%EB%93%A4%EA%B8%B0)
 
 ---
 

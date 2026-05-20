@@ -21,12 +21,14 @@ public class RedisAdBudgetService implements AdBudgetService {
 
     private static final DefaultRedisScript<Long> SPEND_SCRIPT = new DefaultRedisScript<>("""
             local current = redis.call('GET', KEYS[1])
-            if not current then
-                current = ARGV[2]
-            end
-
-            current = tonumber(current)
+            local limit = tonumber(ARGV[2])
             local cost = tonumber(ARGV[1])
+
+            if current then
+                current = tonumber(current)
+            else
+                current = limit
+            end
 
             if current < cost then
                 redis.call('SET', KEYS[2], '1', 'EX', ARGV[3])
@@ -34,7 +36,7 @@ public class RedisAdBudgetService implements AdBudgetService {
             end
 
             local remaining = current - cost
-            redis.call('SET', KEYS[1], remaining)
+            redis.call('SET', KEYS[1], remaining, 'EX', 86400)
 
             if remaining < cost then
                 redis.call('SET', KEYS[2], '1', 'EX', ARGV[3])

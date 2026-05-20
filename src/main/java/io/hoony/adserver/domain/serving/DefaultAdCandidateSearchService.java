@@ -20,6 +20,7 @@ public class DefaultAdCandidateSearchService implements AdCandidateSearchService
 
     private final AdSearchRepository adSearchRepository;
     private final long candidateCacheTtlMs;
+    private final java.util.concurrent.locks.ReentrantLock lock = new java.util.concurrent.locks.ReentrantLock();
     private volatile CachedCandidates cachedCandidates = CachedCandidates.expired();
 
     public DefaultAdCandidateSearchService(
@@ -38,7 +39,8 @@ public class DefaultAdCandidateSearchService implements AdCandidateSearchService
             return current.candidates();
         }
 
-        synchronized (this) {
+        lock.lock();
+        try {
             current = cachedCandidates;
             if (current.isValid(now)) {
                 return current.candidates();
@@ -47,6 +49,8 @@ public class DefaultAdCandidateSearchService implements AdCandidateSearchService
             List<AdDocument> candidates = loadCandidates();
             cachedCandidates = CachedCandidates.from(candidates, candidateCacheTtlMs);
             return candidates;
+        } finally {
+            lock.unlock();
         }
     }
 

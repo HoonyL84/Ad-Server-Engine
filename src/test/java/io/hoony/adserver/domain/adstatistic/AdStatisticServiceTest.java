@@ -1,6 +1,7 @@
 package io.hoony.adserver.domain.adstatistic;
 
 import io.hoony.adserver.domain.ad.AdRepository;
+import io.hoony.adserver.domain.adevent.AdEventRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -20,6 +21,7 @@ class AdStatisticServiceTest {
     private AdRepository adRepository;
     private StringRedisTemplate redisTemplate;
     private ValueOperations<String, String> valueOperations;
+    private AdEventRepository adEventRepository;
     private AdStatisticService adStatisticService;
 
     @BeforeEach
@@ -29,10 +31,11 @@ class AdStatisticServiceTest {
         adRepository = mock(AdRepository.class);
         redisTemplate = mock(StringRedisTemplate.class);
         valueOperations = mock(ValueOperations.class);
+        adEventRepository = mock(AdEventRepository.class);
 
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
 
-        adStatisticService = new AdStatisticService(adStatisticRepository, adRepository, redisTemplate);
+        adStatisticService = new AdStatisticService(adStatisticRepository, adRepository, redisTemplate, adEventRepository);
     }
 
     @Test
@@ -85,6 +88,35 @@ class AdStatisticServiceTest {
 
         verify(valueOperations, never()).set("ad:stat:imp:1", "3000");
         verify(valueOperations).set("ad:stat:clk:1", "80");
+    }
+
+    @Test
+    @DisplayName("벌크 조회 시 Redis에 일부 카운터만 존재하더라도, 기존 값을 유지한 채 누락된 값만 DB에서 로드 및 캐싱한다")
+    void shouldPreservePartialRedisCounterInBulk() {
+        List<Long> adIds = List.of(1L, 2L);
+        // multiGet 반환: 1L(imp=10, clk=null), 2L(imp=null, clk=30)
+        when(valueOperations.multiGet(anyList())).thenReturn(java.util.Arrays.asList("10", null, null, "30"));
+
+        when(adStatisticRepository.findAllById(List.of(1L, 2L))).thenReturn(List.of(
+                AdStatistic.of(1L, 5000L, 150L),
+                AdStatistic.of(2L, 8000L, 200L)
+        ));
+
+        java.util.Map<Long, AdStatisticDto> stats = adStatisticService.getStatistics(adIds);
+
+        assertThat(stats.get(1L).impressions()).isEqualTo(10L); // Redis 기존 값 보존
+        assertThat(stats.get(1L).clicks()).isEqualTo(150L);      // DB에서 보완됨
+        assertThat(stats.get(2L).impressions()).isEqualTo(8000L); // DB에서 보완됨
+        assertThat(stats.get(2L).clicks()).isEqualTo(30L);       // Redis 기존 값 보존
+
+        // Redis 누락된 대상만 set이 가야 함
+        verify(valueOperations, never()).set("ad:stat:imp:1", "10");
+        verify(valueOperations, never()).set("ad:stat:imp:1", "5000");
+        verify(valueOperations).set("ad:stat:clk:1", "150");
+
+        verify(valueOperations).set("ad:stat:imp:2", "8000");
+        verify(valueOperations, never()).set("ad:stat:clk:2", "30");
+        verify(valueOperations, never()).set("ad:stat:clk:2", "200");
     }
 
     @Test
