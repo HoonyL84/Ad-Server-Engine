@@ -99,6 +99,13 @@
 - **CTR-weight Ranking**: `CtrWeightAdRanker`를 통해 `maxBid * smoothedCtr` 방식의 랭킹 선택 가능 설계 (기본 maxBid 전략과 다형성 스위칭 가능)
 - **Data Realign Batch**: Kafka DB 적재 후 Redis 카운팅 실패 엣지케이스의 불일치를 새벽 3시 배치(`realignStatisticsFromEventLedger()`)로 물리적 이벤트 원장 기반 보정 경로 마련
 
+#### 14. Budget Pacing & Operational Hardening (Step 14)
+- **Budget Pacing**: 시간 대비 예산 소진 속도를 기준으로 과소진 광고의 노출을 확률적으로 제어
+- **DMP Circuit Breaker**: DMP 연속 실패 시 호출을 즉시 차단해 불필요한 대기 시간을 줄이는 fail-fast 구조 추가
+- **Stale Candidate Cache**: Elasticsearch 후보 캐시 갱신 지연 시 기존 캐시를 반환해 tail latency 확산을 완화
+- **Async Indexing Guard**: 광고 변경 이벤트를 payload snapshot으로 분리하고, ES 색인 성공 이후 Redis 예산 캐시 무효화
+- **Statistic Sync Hardening**: Redis 통계 동기화와 이벤트 원장 보정 배치에서 반복 조회를 줄이고 벌크 조회/집계 기반으로 개선
+
 ---
 
 ## Key Features
@@ -114,6 +121,7 @@
 - **Traceability**: Trace ID와 MDC 기반으로 요청 단위 원인 추적 경로 확보
 - **K8s Readiness**: K8s 위에서 실행, 상태 점검, self-healing, scale-out 준비 조건 확인
 - **Event Pipeline**: 노출/클릭 이벤트를 Kafka로 분리해 사용자 응답 경로와 저장 경로를 분리
+- **Operational Hardening**: 서킷 브레이커, stale cache, 예산 페이싱, 통계 보정 경로로 운영 리스크를 단계적으로 축소
 
 ---
 
