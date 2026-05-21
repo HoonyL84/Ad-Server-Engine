@@ -43,7 +43,7 @@
 - **DMP Timeout & Fallback**: 유저 프로필 조회에 기본 30ms 타임아웃을 두고, 초과/실패 시 광고 후보 기반 fallback 응답 제공
 - **Fallback Reason 분리**: `PROFILE_NOT_FOUND`, `DMP_TIMEOUT`, `TARGET_NOT_MATCHED`, `NO_CANDIDATE` 등으로 장애와 데이터 부족 상황을 구분
 - **Implementation Timeline**: Step 5에서 gRPC 계약과 fallback 분기를 먼저 고정하고, 이후 실제 gRPC 호출 경로를 보강한 뒤 동일 시나리오를 재검증
-- **Target Filtering**: 성별, 지역, 관심사 기준으로 1차 후보군 필터링 수행
+- **Target Matching**: 성별, 지역, 관심사 기준 매칭은 후보 조회 이후 `AdMatcher`에서 수행
 
 #### 6. Matching & Ranking Boundary (Step 6)
 - **L1 Candidate Search**: Elasticsearch 서버 사이드 `sort + limit`으로 ACTIVE 광고 후보를 최대 200개까지 조회
@@ -56,7 +56,7 @@
 - **Budget Guard**: 예산 부족 광고는 서빙 후보에서 제외하고 다음 후보를 선택
 - **Redis Atomic Spend**: Redis Lua script로 예산 확인과 차감을 하나의 작업처럼 처리
 - **Budget Fallback**: 모든 후보의 예산이 부족하면 `BUDGET_EXHAUSTED`로 응답
-- **Won-based Accounting**: 광고 비용은 원 단위로 반올림해 Redis 예산 차감에 사용
+- **Fixed Impression Cost**: 현재 검증 단계에서는 서빙 1회당 고정 노출 비용(10원)을 Redis 예산 차감에 사용
 
 #### 8. Performance Baseline (Step 8)
 - **Load Test Scenario**: k6 기반으로 `fashion`, `local`, `home` 3개 지면 광고 서빙 부하 테스트 구성
@@ -113,7 +113,7 @@
 - **Parallel Serving**: 유저 프로필과 광고 후보를 병렬 조회하여 응답 지연을 줄이는 구조
 - **Timeout & Fallback**: DMP 30ms 타임아웃 기반 fallback 서빙
 - **Failure Classification**: fallback reason으로 장애와 데이터 미스 구분
-- **Multi-stage Filtering**: 성별, 지역, 관심사 기반 단계별 후보 필터링
+- **Target Matching**: 성별, 지역, 관심사 기반 매칭을 후보 조회 이후 단계에서 수행
 - **Matching Boundary**: 후보 조회, 타겟 매칭, 최종 선택 책임을 분리해 이후 랭킹 기준 확장 가능
 - **Budget Control**: Redis 기반 예산 차감으로 예산 부족 광고 서빙 방지
 - **Performance Baseline**: k6 부하 테스트와 병목 분리를 통해 로컬 단일 인스턴스 기준 성능 기준선 수립
@@ -164,6 +164,7 @@ Alert rule은 Prometheus의 `Alerts` 화면에서 확인할 수 있습니다.
 - **Vol 11.** [#11. 광고 서버를 K8s 위에서 실행해보기](https://velog.io/@hoonyl/11.-%EA%B4%91%EA%B3%A0-%EC%84%9C%EB%B2%84%EB%A5%BC-K8s-%EC%9C%84%EC%97%90%EC%84%9C-%EC%8B%A4%ED%96%89%ED%95%B4%EB%B3%B4%EA%B8%B0)
 - **Vol 12.** [#12. 이벤트 수집 파이프라인을 분리한 이유](https://velog.io/@hoonyl/12.-%EC%9D%B4%EB%B2%A4%ED%8A%B8-%EC%88%98%EC%A7%91-%ED%8C%8C%EC%9D%B4%ED%94%84%EB%9D%BC%EC%9D%B8%EC%9D%84-%EB%B6%84%EB%A6%AC%ED%95%9C-%EC%9D%B4%EC%9C%A0)
 - **Vol 13.** [#13. CTR 집계와 랭킹 확장 기반 만들기](https://velog.io/@hoonyl/13.-CTR-%EC%A7%91%EA%B3%84%EC%99%80-%EB%9E%AD%ED%82%B9-%ED%99%95%EC%9E%A5-%EA%B8%B0%EB%B0%98-%EB%A7%8C%EB%93%A4%EA%B8%B0)
+- **Vol 14.** [#14. 예산 소진 속도와 운영 리스크를 다시 점검하기](https://velog.io/@hoonyl/14.-%EC%98%88%EC%82%B0-%EC%86%8C%EC%A7%84-%EC%86%8D%EB%8F%84%EC%99%80-%EC%9A%B4%EC%98%81-%EB%A6%AC%EC%8A%A4%ED%81%AC%EB%A5%BC-%EB%8B%A4%EC%8B%9C-%EC%A0%90%EA%B2%80%ED%95%98%EA%B8%B0)
 
 ---
 
