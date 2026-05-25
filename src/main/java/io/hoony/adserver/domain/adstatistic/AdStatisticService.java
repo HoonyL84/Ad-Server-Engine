@@ -23,6 +23,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AdStatisticService {
 
+    private static final int REALIGN_CHUNK_SIZE = 500;
+
     private final AdStatisticRepository adStatisticRepository;
     private final AdRepository adRepository;
     private final StringRedisTemplate redisTemplate;
@@ -156,14 +158,23 @@ public class AdStatisticService {
     @Scheduled(cron = "${ad-server.serving.realign-cron:0 0 3 * * *}")
     @Transactional
     public void realignStatisticsFromEventLedger() {
-        log.info("Starting Ad statistics realign batch from physical event ledger using bulk query...");
+        log.info("Starting Ad statistics realign batch from event ledger using chunked aggregation...");
         List<Long> adIds = adRepository.findAllIds();
         if (adIds.isEmpty()) {
             return;
         }
 
-        List<AdEventCountDto> aggregated = adEventRepository.countAllEventsGrouped();
+        int savedCount = 0;
+        for (int start = 0; start < adIds.size(); start += REALIGN_CHUNK_SIZE) {
+            List<Long> chunk = adIds.subList(start, Math.min(start + REALIGN_CHUNK_SIZE, adIds.size()));
+            savedCount += realignChunk(chunk);
+        }
 
+        log.info("Successfully realigned {} Ad statistics from event ledger.", savedCount);
+    }
+
+    private int realignChunk(List<Long> adIds) {
+        List<AdEventCountDto> aggregated = adEventRepository.countEventsGroupedByAdIds(adIds);
         Map<Long, Map<AdEventType, Long>> eventMap = aggregated.stream()
                 .collect(Collectors.groupingBy(
                         AdEventCountDto::adId,
@@ -186,8 +197,8 @@ public class AdStatisticService {
         if (!statsToSave.isEmpty()) {
             redisTemplate.opsForValue().multiSet(redisUpdates);
             adStatisticRepository.saveAll(statsToSave);
-            log.info("Successfully realigned and saved {} Ad statistics from event ledger.", statsToSave.size());
         }
+        return statsToSave.size();
     }
 
     private long parseLongOrDefault(String value, long defaultValue) {

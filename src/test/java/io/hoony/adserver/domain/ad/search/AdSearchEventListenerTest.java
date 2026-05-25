@@ -16,8 +16,9 @@ class AdSearchEventListenerTest {
     private final AdSearchRepository adSearchRepository = mock(AdSearchRepository.class);
     private final AdDocumentMapper adDocumentMapper = mock(AdDocumentMapper.class);
     private final AdBudgetService adBudgetService = mock(AdBudgetService.class);
+    private final AdSearchOutboxService adSearchOutboxService = mock(AdSearchOutboxService.class);
     private final AdSearchEventListener listener =
-            new AdSearchEventListener(adSearchRepository, adDocumentMapper, adBudgetService);
+            new AdSearchEventListener(adSearchRepository, adDocumentMapper, adBudgetService, adSearchOutboxService);
 
     @Test
     @DisplayName("Updated ad event evicts budget cache only after ES sync succeeds")
@@ -33,6 +34,11 @@ class AdSearchEventListenerTest {
 
         verify(adSearchRepository).save(document);
         verify(adBudgetService).evictCache(1L);
+        verify(adSearchOutboxService, never()).enqueue(
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any()
+        );
     }
 
     @Test
@@ -48,5 +54,10 @@ class AdSearchEventListenerTest {
         listener.handleAdUpdatedEvent(new AdUpdatedEvent(payload));
 
         verify(adBudgetService, never()).evictCache(1L);
+        verify(adSearchOutboxService).enqueue(
+                org.mockito.ArgumentMatchers.eq(AdSearchOutboxEventType.UPDATED),
+                org.mockito.ArgumentMatchers.eq(payload),
+                org.mockito.ArgumentMatchers.any()
+        );
     }
 }

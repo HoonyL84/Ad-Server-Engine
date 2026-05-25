@@ -4,6 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -18,17 +19,21 @@ public class SimpleCircuitBreaker {
 
     private final int failureThreshold;
     private final long backoffWindowMs;
+    private final long backoffJitterMs;
 
     private final AtomicReference<State> state = new AtomicReference<>(State.CLOSED);
     private final AtomicInteger failureCount = new AtomicInteger(0);
     private final AtomicLong stateChangedAt = new AtomicLong(System.currentTimeMillis());
+    private final AtomicLong nextHalfOpenAt = new AtomicLong(0L);
 
     public SimpleCircuitBreaker(
             @Value("${ad-server.serving.cb.failure-threshold:5}") int failureThreshold,
-            @Value("${ad-server.serving.cb.backoff-window-ms:10000}") long backoffWindowMs
+            @Value("${ad-server.serving.cb.backoff-window-ms:10000}") long backoffWindowMs,
+            @Value("${ad-server.serving.cb.backoff-jitter-ms:2000}") long backoffJitterMs
     ) {
         this.failureThreshold = failureThreshold;
         this.backoffWindowMs = backoffWindowMs;
+        this.backoffJitterMs = Math.max(backoffJitterMs, 0L);
     }
 
     public boolean allowRequest() {
@@ -39,8 +44,7 @@ public class SimpleCircuitBreaker {
 
         if (currentState == State.OPEN) {
             long now = System.currentTimeMillis();
-            long openDuration = now - stateChangedAt.get();
-            if (openDuration >= backoffWindowMs) {
+            if (now >= nextHalfOpenAt.get()) {
                 if (state.compareAndSet(State.OPEN, State.HALF_OPEN)) {
                     stateChangedAt.set(now);
                     log.info("Circuit Breaker transitioned from OPEN to HALF_OPEN. Allowing test request.");
@@ -54,7 +58,7 @@ public class SimpleCircuitBreaker {
             long now = System.currentTimeMillis();
             if (now - stateChangedAt.get() >= backoffWindowMs) {
                 if (state.compareAndSet(State.HALF_OPEN, State.OPEN)) {
-                    stateChangedAt.set(now);
+                    scheduleOpenWindow(now);
                     log.warn("Circuit Breaker HALF_OPEN probe expired. Transitioned back to OPEN.");
                 }
             }
@@ -82,12 +86,12 @@ public class SimpleCircuitBreaker {
 
         if (currentState == State.CLOSED && currentFailures >= failureThreshold) {
             if (state.compareAndSet(State.CLOSED, State.OPEN)) {
-                stateChangedAt.set(System.currentTimeMillis());
-                log.warn("Circuit Breaker OPENED! Failure threshold reached. Blocked for {} ms.", backoffWindowMs);
+                long waitMs = scheduleOpenWindow(System.currentTimeMillis());
+                log.warn("Circuit Breaker OPENED! Failure threshold reached. Blocked for {} ms.", waitMs);
             }
         } else if (currentState == State.HALF_OPEN) {
             if (state.compareAndSet(State.HALF_OPEN, State.OPEN)) {
-                stateChangedAt.set(System.currentTimeMillis());
+                scheduleOpenWindow(System.currentTimeMillis());
                 log.warn("Circuit Breaker transition from HALF_OPEN back to OPEN due to test request failure.");
             }
         }
@@ -95,5 +99,13 @@ public class SimpleCircuitBreaker {
 
     public State getState() {
         return state.get();
+    }
+
+    private long scheduleOpenWindow(long now) {
+        long jitterMs = backoffJitterMs == 0L ? 0L : ThreadLocalRandom.current().nextLong(backoffJitterMs + 1L);
+        long waitMs = backoffWindowMs + jitterMs;
+        stateChangedAt.set(now);
+        nextHalfOpenAt.set(now + waitMs);
+        return waitMs;
     }
 }

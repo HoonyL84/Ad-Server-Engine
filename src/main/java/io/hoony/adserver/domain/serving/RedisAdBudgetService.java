@@ -2,6 +2,7 @@ package io.hoony.adserver.domain.serving;
 
 import io.hoony.adserver.domain.ad.search.AdDocument;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
@@ -65,6 +66,7 @@ public class RedisAdBudgetService implements AdBudgetService {
     private final Clock clock;
     private final Random random;
 
+    @Autowired
     public RedisAdBudgetService(StringRedisTemplate redisTemplate) {
         this(redisTemplate, Clock.systemDefaultZone(), new Random());
     }

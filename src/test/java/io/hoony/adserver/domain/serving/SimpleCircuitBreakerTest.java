@@ -10,7 +10,7 @@ class SimpleCircuitBreakerTest {
     @Test
     @DisplayName("5회 연속 실패 시 CLOSED에서 OPEN으로 전이하고 10초 대기 윈도우 동안 요청을 차단한다")
     void testStateTransitions() throws InterruptedException {
-        SimpleCircuitBreaker cb = new SimpleCircuitBreaker(5, 100); // 100ms window for fast testing
+        SimpleCircuitBreaker cb = new SimpleCircuitBreaker(5, 100, 0); // 100ms window for fast testing
 
         // Initial State
         assertThat(cb.getState()).isEqualTo(SimpleCircuitBreaker.State.CLOSED);
@@ -62,5 +62,21 @@ class SimpleCircuitBreakerTest {
         cb.recordSuccess();
         assertThat(cb.getState()).isEqualTo(SimpleCircuitBreaker.State.CLOSED);
         assertThat(cb.allowRequest()).isTrue();
+    }
+
+    @Test
+    @DisplayName("OPEN 복구 대기 시간에 jitter를 더해 여러 인스턴스의 HALF_OPEN 진입 시점을 분산한다")
+    void appliesJitterToOpenWindow() throws InterruptedException {
+        SimpleCircuitBreaker cb = new SimpleCircuitBreaker(1, 100, 100);
+
+        cb.recordFailure();
+        assertThat(cb.getState()).isEqualTo(SimpleCircuitBreaker.State.OPEN);
+
+        Thread.sleep(50);
+        assertThat(cb.allowRequest()).isFalse();
+
+        Thread.sleep(180);
+        assertThat(cb.allowRequest()).isTrue();
+        assertThat(cb.getState()).isEqualTo(SimpleCircuitBreaker.State.HALF_OPEN);
     }
 }

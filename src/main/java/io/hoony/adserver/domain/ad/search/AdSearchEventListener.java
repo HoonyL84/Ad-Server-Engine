@@ -23,44 +23,61 @@ public class AdSearchEventListener {
     private final AdSearchRepository adSearchRepository;
     private final AdDocumentMapper adDocumentMapper;
     private final AdBudgetService adBudgetService;
+    private final AdSearchOutboxService adSearchOutboxService;
 
     @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handleAdCreatedEvent(AdCreatedEvent event) {
-        MdcTraceUtils.withTraceContext(event.getPayload().traceContext(), () -> sync(event.getPayload())).run();
+        MdcTraceUtils.withTraceContext(event.getPayload().traceContext(), () -> {
+            SyncResult result = sync(event.getPayload());
+            if (!result.success()) {
+                adSearchOutboxService.enqueue(
+                        AdSearchOutboxEventType.CREATED,
+                        event.getPayload(),
+                        result.errorMessage()
+                );
+            }
+        }).run();
     }
 
     @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handleAdUpdatedEvent(AdUpdatedEvent event) {
         MdcTraceUtils.withTraceContext(event.getPayload().traceContext(), () -> {
-            if (sync(event.getPayload())) {
+            SyncResult result = sync(event.getPayload());
+            if (result.success()) {
                 adBudgetService.evictCache(event.getPayload().id());
+            } else {
+                adSearchOutboxService.enqueue(
+                        AdSearchOutboxEventType.UPDATED,
+                        event.getPayload(),
+                        result.errorMessage()
+                );
             }
         }).run();
     }
 
-    private boolean sync(AdEventPayload payload) {
+    private SyncResult sync(AdEventPayload payload) {
         log.info("Starting ES sync for ad: {}", payload.id());
 
         for (int attempt = 1; attempt <= MAX_SYNC_ATTEMPTS; attempt++) {
             try {
                 adSearchRepository.save(adDocumentMapper.toDocument(payload));
                 log.info("Successfully synced ad: {} to Elasticsearch", payload.id());
-                return true;
+                return SyncResult.ok();
             } catch (Exception e) {
                 if (attempt == MAX_SYNC_ATTEMPTS) {
                     log.error("Failed to sync ad: {} to Elasticsearch after {} attempts", payload.id(), attempt, e);
-                    return false;
+                    return SyncResult.failed(e.getMessage());
                 }
 
                 log.warn("Failed to sync ad: {} to Elasticsearch. attempt={}/{}", payload.id(), attempt, MAX_SYNC_ATTEMPTS, e);
                 if (!sleepBeforeRetry(attempt)) {
-                    return false;
+                    return SyncResult.failed("Interrupted while waiting for Elasticsearch sync retry");
                 }
             }
         }
-        return false;
+        return SyncResult.failed("Unknown Elasticsearch sync failure");
     }
 
     private boolean sleepBeforeRetry(int attempt) {
@@ -71,6 +88,17 @@ public class AdSearchEventListener {
             Thread.currentThread().interrupt();
             log.warn("Interrupted while waiting for Elasticsearch sync retry");
             return false;
+        }
+    }
+
+    private record SyncResult(boolean success, String errorMessage) {
+
+        private static SyncResult ok() {
+            return new SyncResult(true, null);
+        }
+
+        private static SyncResult failed(String errorMessage) {
+            return new SyncResult(false, errorMessage);
         }
     }
 }

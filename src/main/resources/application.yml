@@ -65,6 +65,10 @@ ad-server:
     dmp-timeout-ms: 30
     candidate-timeout-ms: 50
     candidate-cache-ttl-ms: 100
+    cb:
+      failure-threshold: 5
+      backoff-window-ms: 10000
+      backoff-jitter-ms: 2000
   dmp:
     provider: grpc
     grpc:

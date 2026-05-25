@@ -186,7 +186,7 @@ class AdStatisticServiceTest {
     void shouldRealignStatisticsFromGroupedEventLedger() {
         List<Long> adIds = List.of(1L, 2L);
         when(adRepository.findAllIds()).thenReturn(adIds);
-        when(adEventRepository.countAllEventsGrouped()).thenReturn(List.of(
+        when(adEventRepository.countEventsGroupedByAdIds(adIds)).thenReturn(List.of(
                 new AdEventCountDto(1L, AdEventType.IMPRESSION, 10L),
                 new AdEventCountDto(1L, AdEventType.CLICK, 2L),
                 new AdEventCountDto(2L, AdEventType.IMPRESSION, 5L)
@@ -215,7 +215,8 @@ class AdStatisticServiceTest {
         assertThat(stat2.getImpressionCount()).isEqualTo(5L);
         assertThat(stat2.getClickCount()).isZero();
 
-        verify(adEventRepository).countAllEventsGrouped();
+        verify(adEventRepository).countEventsGroupedByAdIds(adIds);
+        verify(adEventRepository, never()).countAllEventsGrouped();
         verify(adEventRepository, never()).countByAdIdAndEventType(any(), any());
     }
 }

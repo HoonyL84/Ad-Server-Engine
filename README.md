@@ -106,6 +106,13 @@
 - **Async Indexing Guard**: 광고 변경 이벤트를 payload snapshot으로 분리하고, ES 색인 성공 이후 Redis 예산 캐시 무효화
 - **Statistic Sync Hardening**: Redis 통계 동기화와 이벤트 원장 보정 배치에서 반복 조회를 줄이고 벌크 조회/집계 기반으로 개선
 
+#### 15. Reliability Hardening (Step 15)
+- **Kafka DLQ**: 이벤트 Consumer 반복 실패 시 실패 payload를 `ad-events-dlq`로 격리해 후속 복구 출발점 마련
+- **ES Outbox-lite**: 비동기 Elasticsearch 색인 최종 실패 시 payload snapshot을 outbox에 저장하고 scheduler로 재처리
+- **Statistic Realign Chunking**: 이벤트 원장 기반 통계 보정 배치를 광고 ID 청크 단위로 나누어 메모리 부담 완화
+- **Circuit Breaker Jitter**: scale-out 환경에서 여러 Pod가 동시에 DMP 복구 요청을 보내는 상황을 줄이기 위해 backoff jitter 적용
+- **Reliability Smoke Test**: 50 VU 이벤트 포함 회귀 테스트로 서빙/이벤트 수집 흐름, DLQ 발생 여부, consumer lag 관측
+
 ---
 
 ## Key Features
@@ -165,6 +172,7 @@ Alert rule은 Prometheus의 `Alerts` 화면에서 확인할 수 있습니다.
 - **Vol 12.** [#12. 이벤트 수집 파이프라인을 분리한 이유](https://velog.io/@hoonyl/12.-%EC%9D%B4%EB%B2%A4%ED%8A%B8-%EC%88%98%EC%A7%91-%ED%8C%8C%EC%9D%B4%ED%94%84%EB%9D%BC%EC%9D%B8%EC%9D%84-%EB%B6%84%EB%A6%AC%ED%95%9C-%EC%9D%B4%EC%9C%A0)
 - **Vol 13.** [#13. CTR 집계와 랭킹 확장 기반 만들기](https://velog.io/@hoonyl/13.-CTR-%EC%A7%91%EA%B3%84%EC%99%80-%EB%9E%AD%ED%82%B9-%ED%99%95%EC%9E%A5-%EA%B8%B0%EB%B0%98-%EB%A7%8C%EB%93%A4%EA%B8%B0)
 - **Vol 14.** [#14. 예산 소진 속도와 운영 리스크를 다시 점검하기](https://velog.io/@hoonyl/14.-%EC%98%88%EC%82%B0-%EC%86%8C%EC%A7%84-%EC%86%8D%EB%8F%84%EC%99%80-%EC%9A%B4%EC%98%81-%EB%A6%AC%EC%8A%A4%ED%81%AC%EB%A5%BC-%EB%8B%A4%EC%8B%9C-%EC%A0%90%EA%B2%80%ED%95%98%EA%B8%B0)
+- **Vol 15.** [#15. 실패한 데이터를 그냥 잃지 않도록 만들기](https://velog.io/@hoonyl/15.-%EC%8B%A4%ED%8C%A8%ED%95%9C-%EB%8D%B0%EC%9D%B4%ED%84%B0%EB%A5%BC-%EA%B7%B8%EB%83%A5-%EC%9E%83%EC%A7%80-%EC%95%8A%EB%8F%84%EB%A1%9D-%EB%A7%8C%EB%93%A4%EA%B8%B0)
 
 ---
 
