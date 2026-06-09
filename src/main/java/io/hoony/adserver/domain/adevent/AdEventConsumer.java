@@ -1,5 +1,6 @@
 package io.hoony.adserver.domain.adevent;
 
+import io.hoony.adserver.config.TracingSupport;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -14,17 +15,22 @@ public class AdEventConsumer {
 
     private final AdEventRepository adEventRepository;
     private final StringRedisTemplate redisTemplate;
+    private final TracingSupport tracingSupport;
 
     @KafkaListener(topics = "ad-impressions", groupId = "ad-server-group")
     public void consumeImpression(AdEventRequest request) {
-        log.debug("Consuming impression event from Kafka: eventId={}", request.eventId());
-        saveEvent(AdEventType.IMPRESSION, request);
+        tracingSupport.observe("ad.kafka.consume", "event.type", AdEventType.IMPRESSION.name(), () -> {
+            log.debug("Consuming impression event from Kafka: eventId={}", request.eventId());
+            saveEvent(AdEventType.IMPRESSION, request);
+        });
     }
 
     @KafkaListener(topics = "ad-clicks", groupId = "ad-server-group")
     public void consumeClick(AdEventRequest request) {
-        log.debug("Consuming click event from Kafka: eventId={}", request.eventId());
-        saveEvent(AdEventType.CLICK, request);
+        tracingSupport.observe("ad.kafka.consume", "event.type", AdEventType.CLICK.name(), () -> {
+            log.debug("Consuming click event from Kafka: eventId={}", request.eventId());
+            saveEvent(AdEventType.CLICK, request);
+        });
     }
 
     private void saveEvent(AdEventType eventType, AdEventRequest request) {
@@ -43,7 +49,8 @@ public class AdEventConsumer {
         String key = (eventType == AdEventType.IMPRESSION) ?
                 "ad:stat:imp:" + adId : "ad:stat:clk:" + adId;
         try {
-            redisTemplate.opsForValue().increment(key);
+            tracingSupport.observe("ad.redis.stat.increment", "event.type", eventType.name(), () ->
+                    redisTemplate.opsForValue().increment(key));
             log.debug("Successfully incremented Redis key={}", key);
         } catch (Exception e) {
             log.error("Failed to increment Redis counter for key: {}, error={}", key, e.getMessage(), e);

@@ -1,7 +1,9 @@
 package io.hoony.adserver.domain.serving;
 
+import io.hoony.adserver.config.TracingSupport;
 import io.hoony.adserver.domain.ad.AdStatus;
 import io.hoony.adserver.domain.ad.search.AdDocument;
+import io.micrometer.observation.ObservationRegistry;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -27,7 +29,7 @@ class RedisAdBudgetServiceTest {
 
     private final StringRedisTemplate redisTemplate = mock(StringRedisTemplate.class);
     private final ValueOperations<String, String> valueOperations = mock(ValueOperations.class);
-    private final RedisAdBudgetService service = new RedisAdBudgetService(redisTemplate);
+    private final RedisAdBudgetService service = new RedisAdBudgetService(redisTemplate, new TracingSupport(ObservationRegistry.NOOP));
 
     @BeforeEach
     void setUp() {

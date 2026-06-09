@@ -1,5 +1,6 @@
 package io.hoony.adserver.domain.adstatistic;
 
+import io.hoony.adserver.config.TracingSupport;
 import io.hoony.adserver.domain.ad.AdRepository;
 import io.hoony.adserver.domain.adevent.AdEventRepository;
 import io.hoony.adserver.domain.adevent.AdEventType;
@@ -29,6 +30,7 @@ public class AdStatisticService {
     private final AdRepository adRepository;
     private final StringRedisTemplate redisTemplate;
     private final AdEventRepository adEventRepository;
+    private final TracingSupport tracingSupport;
 
     public AdStatisticDto getStatistic(Long adId) {
         String impKey = "ad:stat:imp:" + adId;
@@ -71,7 +73,8 @@ public class AdStatisticService {
             keys.add("ad:stat:clk:" + adId);
         }
 
-        List<String> values = redisTemplate.opsForValue().multiGet(keys);
+        List<String> values = tracingSupport.observe("ad.redis.stat.multiget", () ->
+                redisTemplate.opsForValue().multiGet(keys));
         Map<Long, AdStatisticDto> result = new java.util.HashMap<>();
         List<Long> missingAdIds = new ArrayList<>();
 
@@ -123,6 +126,10 @@ public class AdStatisticService {
     @Scheduled(fixedDelayString = "${ad-server.serving.sync-delay-ms:60000}")
     @Transactional
     public void syncToDatabase() {
+        tracingSupport.observe("ad.stat.sync", this::doSyncToDatabase);
+    }
+
+    private void doSyncToDatabase() {
         log.debug("Syncing Ad statistics from Redis to Database...");
         List<Long> adIds = adRepository.findAllIds();
         if (adIds.isEmpty()) {
@@ -158,6 +165,10 @@ public class AdStatisticService {
     @Scheduled(cron = "${ad-server.serving.realign-cron:0 0 3 * * *}")
     @Transactional
     public void realignStatisticsFromEventLedger() {
+        tracingSupport.observe("ad.stat.realign", this::doRealignStatisticsFromEventLedger);
+    }
+
+    private void doRealignStatisticsFromEventLedger() {
         log.info("Starting Ad statistics realign batch from event ledger using chunked aggregation...");
         List<Long> adIds = adRepository.findAllIds();
         if (adIds.isEmpty()) {
@@ -195,7 +206,8 @@ public class AdStatisticService {
         }
 
         if (!statsToSave.isEmpty()) {
-            redisTemplate.opsForValue().multiSet(redisUpdates);
+            tracingSupport.observe("ad.redis.stat.multiset", () ->
+                    redisTemplate.opsForValue().multiSet(redisUpdates));
             adStatisticRepository.saveAll(statsToSave);
         }
         return statsToSave.size();
@@ -220,7 +232,8 @@ public class AdStatisticService {
             keys.add("ad:stat:clk:" + adId);
         }
 
-        List<String> values = redisTemplate.opsForValue().multiGet(keys);
+        List<String> values = tracingSupport.observe("ad.redis.stat.multiget", () ->
+                redisTemplate.opsForValue().multiGet(keys));
         if (values == null) {
             return Map.of();
         }

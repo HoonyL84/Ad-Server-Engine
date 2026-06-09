@@ -1,10 +1,12 @@
 package io.hoony.adserver.domain.serving;
 
+import io.hoony.adserver.config.TracingSupport;
 import io.hoony.adserver.domain.ad.AdStatus;
 import io.hoony.adserver.domain.ad.search.AdDocument;
 import io.hoony.adserver.domain.user.profile.UserProfile;
 import io.hoony.adserver.domain.user.profile.UserProfileClient;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import io.micrometer.observation.ObservationRegistry;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -59,6 +61,7 @@ class AdServingServiceTest {
                 adServingMetrics,
                 executorService,
                 simpleCircuitBreaker,
+                new TracingSupport(ObservationRegistry.NOOP),
                 dmpTimeoutMs,
                 candidateTimeoutMs
         );

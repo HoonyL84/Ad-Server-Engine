@@ -1,5 +1,6 @@
 package io.hoony.adserver.domain.serving;
 
+import io.hoony.adserver.config.TracingSupport;
 import io.hoony.adserver.domain.ad.AdStatus;
 import io.hoony.adserver.domain.ad.search.AdDocument;
 import io.hoony.adserver.domain.ad.search.AdSearchRepository;
@@ -19,15 +20,18 @@ public class DefaultAdCandidateSearchService implements AdCandidateSearchService
     private static final int MAX_CANDIDATES = 200;
 
     private final AdSearchRepository adSearchRepository;
+    private final TracingSupport tracingSupport;
     private final long candidateCacheTtlMs;
     private final java.util.concurrent.locks.ReentrantLock lock = new java.util.concurrent.locks.ReentrantLock();
     private volatile CachedCandidates cachedCandidates = CachedCandidates.expired();
 
     public DefaultAdCandidateSearchService(
             AdSearchRepository adSearchRepository,
+            TracingSupport tracingSupport,
             @Value("${ad-server.serving.candidate-cache-ttl-ms:100}") long candidateCacheTtlMs
     ) {
         this.adSearchRepository = adSearchRepository;
+        this.tracingSupport = tracingSupport;
         this.candidateCacheTtlMs = candidateCacheTtlMs;
     }
 
@@ -59,7 +63,7 @@ public class DefaultAdCandidateSearchService implements AdCandidateSearchService
                 return current.candidates();
             }
 
-            List<AdDocument> candidates = loadCandidates();
+            List<AdDocument> candidates = tracingSupport.observe("ad.elasticsearch.candidates", () -> loadCandidates());
             cachedCandidates = CachedCandidates.from(candidates, candidateCacheTtlMs);
             return candidates;
         } finally {

@@ -113,6 +113,13 @@
 - **Circuit Breaker Jitter**: scale-out 환경에서 여러 Pod가 동시에 DMP 복구 요청을 보내는 상황을 줄이기 위해 backoff jitter 적용
 - **Reliability Smoke Test**: 50 VU 이벤트 포함 회귀 테스트로 서빙/이벤트 수집 흐름, DLQ 발생 여부, consumer lag 관측
 
+#### 16. Distributed Tracing (Step 16)
+- **OpenTelemetry / Jaeger**: 로컬 Jaeger로 광고 서빙 요청의 내부 처리 구간 trace 확인
+- **Serving Span 분리**: DMP 조회, 후보 조회, Elasticsearch 조회, 타겟 매칭, 랭킹, Redis 예산 차감 구간을 span으로 분리
+- **Kafka / Batch Trace**: 이벤트 발행/소비와 통계 동기화/보정 배치 구간에도 trace 추가
+- **Observation Boundary**: Grafana는 이상 징후를 보고, Jaeger는 요청 내부 병목 구간을 따라가는 역할로 분리
+- **Smoke Verification**: 5 VU smoke 테스트와 Jaeger service/span 확인으로 tracing 추가 후 기본 서빙 흐름 검증
+
 ---
 
 ## Key Features
@@ -126,6 +133,7 @@
 - **Performance Baseline**: k6 부하 테스트와 병목 분리를 통해 로컬 단일 인스턴스 기준 성능 기준선 수립
 - **Observability**: Prometheus/Grafana 기반으로 latency, fallback, Redis/ES 상태를 지속 관측
 - **Traceability**: Trace ID와 MDC 기반으로 요청 단위 원인 추적 경로 확보
+- **Distributed Tracing**: OpenTelemetry/Jaeger 기반으로 요청 내부 구간별 처리 시간 확인
 - **K8s Readiness**: K8s 위에서 실행, 상태 점검, self-healing, scale-out 준비 조건 확인
 - **Event Pipeline**: 노출/클릭 이벤트를 Kafka로 분리해 사용자 응답 경로와 저장 경로를 분리
 - **Operational Hardening**: 서킷 브레이커, stale cache, 예산 페이싱, 통계 보정 경로로 운영 리스크를 단계적으로 축소
@@ -135,11 +143,12 @@
 ## Local Observability
 
 ```powershell
-docker compose up -d prometheus grafana redis-exporter elasticsearch-exporter
+docker compose up -d prometheus grafana redis-exporter elasticsearch-exporter jaeger
 ```
 
 - Prometheus: `http://localhost:9091`
 - Grafana: `http://localhost:3000` (`admin` / `admin`)
+- Jaeger: `http://localhost:16686`
 - App Metrics: `http://localhost:8080/actuator/prometheus`
 - Grafana Dashboard: `Ad Server > Ad Serving Overview`
 
@@ -173,6 +182,7 @@ Alert rule은 Prometheus의 `Alerts` 화면에서 확인할 수 있습니다.
 - **Vol 13.** [#13. CTR 집계와 랭킹 확장 기반 만들기](https://velog.io/@hoonyl/13.-CTR-%EC%A7%91%EA%B3%84%EC%99%80-%EB%9E%AD%ED%82%B9-%ED%99%95%EC%9E%A5-%EA%B8%B0%EB%B0%98-%EB%A7%8C%EB%93%A4%EA%B8%B0)
 - **Vol 14.** [#14. 예산 소진 속도와 운영 리스크를 다시 점검하기](https://velog.io/@hoonyl/14.-%EC%98%88%EC%82%B0-%EC%86%8C%EC%A7%84-%EC%86%8D%EB%8F%84%EC%99%80-%EC%9A%B4%EC%98%81-%EB%A6%AC%EC%8A%A4%ED%81%AC%EB%A5%BC-%EB%8B%A4%EC%8B%9C-%EC%A0%90%EA%B2%80%ED%95%98%EA%B8%B0)
 - **Vol 15.** [#15. 실패한 데이터를 그냥 잃지 않도록 만들기](https://velog.io/@hoonyl/15.-%EC%8B%A4%ED%8C%A8%ED%95%9C-%EB%8D%B0%EC%9D%B4%ED%84%B0%EB%A5%BC-%EA%B7%B8%EB%83%A5-%EC%9E%83%EC%A7%80-%EC%95%8A%EB%8F%84%EB%A1%9D-%EB%A7%8C%EB%93%A4%EA%B8%B0)
+- **Vol 16.** [#16. 지표에서 보인 문제를 요청 흐름으로 따라가기](https://velog.io/@hoonyl/16.-%EC%A7%80%ED%91%9C%EC%97%90%EC%84%9C-%EB%B3%B4%EC%9D%B8-%EB%AC%B8%EC%A0%9C%EB%A5%BC-%EC%9A%94%EC%B2%AD-%ED%9D%90%EB%A6%84%EC%9C%BC%EB%A1%9C-%EB%94%B0%EB%9D%BC%EA%B0%80%EA%B8%B0)
 
 ---
 

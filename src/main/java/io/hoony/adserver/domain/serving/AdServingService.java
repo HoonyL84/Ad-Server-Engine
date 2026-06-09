@@ -1,6 +1,7 @@
 package io.hoony.adserver.domain.serving;
 
 import io.hoony.adserver.config.MdcTraceUtils;
+import io.hoony.adserver.config.TracingSupport;
 import io.hoony.adserver.domain.ad.search.AdDocument;
 import io.hoony.adserver.domain.user.profile.UserProfile;
 import io.hoony.adserver.domain.user.profile.UserProfileClient;
@@ -30,6 +31,7 @@ public class AdServingService {
     private final AdServingMetrics adServingMetrics;
     private final ExecutorService executorService;
     private final SimpleCircuitBreaker simpleCircuitBreaker;
+    private final TracingSupport tracingSupport;
     private final long dmpTimeoutMs;
     private final long candidateTimeoutMs;
 
@@ -43,6 +45,7 @@ public class AdServingService {
             AdServingMetrics adServingMetrics,
             ExecutorService executorService,
             SimpleCircuitBreaker simpleCircuitBreaker,
+            TracingSupport tracingSupport,
             @Value("${ad-server.serving.dmp-timeout-ms:30}") long dmpTimeoutMs,
             @Value("${ad-server.serving.candidate-timeout-ms:50}") long candidateTimeoutMs
     ) {
@@ -61,15 +64,18 @@ public class AdServingService {
         this.adServingMetrics = adServingMetrics;
         this.executorService = executorService;
         this.simpleCircuitBreaker = simpleCircuitBreaker;
+        this.tracingSupport = tracingSupport;
         this.dmpTimeoutMs = dmpTimeoutMs;
         this.candidateTimeoutMs = candidateTimeoutMs;
     }
 
     public AdServingResult serve(String userId, String slotId) {
-        Timer.Sample sample = adServingMetrics.startTimer();
-        AdServingResult result = doServe(userId, slotId);
-        adServingMetrics.record(slotId, result, sample);
-        return result;
+        return tracingSupport.observe("ad.serving.request", "slot.id", slotId, () -> {
+            Timer.Sample sample = adServingMetrics.startTimer();
+            AdServingResult result = doServe(userId, slotId);
+            adServingMetrics.record(slotId, result, sample);
+            return result;
+        });
     }
 
     private AdServingResult doServe(String userId, String slotId) {
@@ -79,13 +85,17 @@ public class AdServingService {
             boolean allowDmp = simpleCircuitBreaker.allowRequest();
             Future<Optional<UserProfile>> profileFuture = null;
             if (allowDmp) {
-                profileFuture = executorService.submit(MdcTraceUtils.withTraceContext(() -> userProfileClient.getUserProfile(userId)));
+                profileFuture = executorService.submit(MdcTraceUtils.withTraceContext(() ->
+                        tracingSupport.observe("ad.dmp.profile", "dmp.provider", "grpc", () ->
+                                userProfileClient.getUserProfile(userId))));
             } else {
                 log.debug("DMP request blocked by Circuit Breaker. userId={}", userId);
             }
 
             Future<List<AdDocument>> candidatesFuture =
-                    executorService.submit(MdcTraceUtils.withTraceContext(() -> adCandidateSearchService.searchCandidates(slotId)));
+                    executorService.submit(MdcTraceUtils.withTraceContext(() ->
+                            tracingSupport.observe("ad.candidate.lookup", "slot.id", slotId, () ->
+                                    adCandidateSearchService.searchCandidates(slotId))));
 
             CandidateResult candidateResult = getCandidatesWithTimeout(candidatesFuture);
             if (candidateResult.reason.isPresent()) {
@@ -104,7 +114,8 @@ public class AdServingService {
             log.debug("Profile lookup completed. userId={}, reason={}", userId, profileResult.reason);
 
             if (profileResult.reason == ServingFallbackReason.NONE) {
-                List<AdDocument> filtered = adMatcher.match(candidates, profileResult.profile.orElseThrow());
+                List<AdDocument> filtered = tracingSupport.observe("ad.target.match", "slot.id", slotId, () ->
+                        adMatcher.match(candidates, profileResult.profile.orElseThrow()));
                 log.debug("Target matching completed. slotId={}, candidateCount={}, matchedCount={}",
                         slotId, candidates.size(), filtered.size());
                 if (!filtered.isEmpty()) {
@@ -127,8 +138,8 @@ public class AdServingService {
             int candidateCount,
             int matchedCount
     ) {
-        List<AdDocument> ranked = adRanker.rank(candidates);
-        List<AdDocument> spendable = adBudgetService.filterExhausted(ranked);
+        List<AdDocument> ranked = tracingSupport.observe("ad.ranking", () -> adRanker.rank(candidates));
+        List<AdDocument> spendable = tracingSupport.observe("ad.budget.filter", () -> adBudgetService.filterExhausted(ranked));
 
         return spendable.stream()
                 .filter(adBudgetService::trySpend)

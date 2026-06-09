@@ -1,8 +1,10 @@
 package io.hoony.adserver.domain.ad.search;
 
+import io.hoony.adserver.config.TracingSupport;
 import io.hoony.adserver.domain.ad.event.AdEventPayload;
 import io.hoony.adserver.domain.ad.event.AdUpdatedEvent;
 import io.hoony.adserver.domain.serving.AdBudgetService;
+import io.micrometer.observation.ObservationRegistry;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -18,7 +20,13 @@ class AdSearchEventListenerTest {
     private final AdBudgetService adBudgetService = mock(AdBudgetService.class);
     private final AdSearchOutboxService adSearchOutboxService = mock(AdSearchOutboxService.class);
     private final AdSearchEventListener listener =
-            new AdSearchEventListener(adSearchRepository, adDocumentMapper, adBudgetService, adSearchOutboxService);
+            new AdSearchEventListener(
+                    adSearchRepository,
+                    adDocumentMapper,
+                    adBudgetService,
+                    adSearchOutboxService,
+                    new TracingSupport(ObservationRegistry.NOOP)
+            );
 
     @Test
     @DisplayName("Updated ad event evicts budget cache only after ES sync succeeds")

@@ -1,8 +1,10 @@
 package io.hoony.adserver.domain.serving;
 
+import io.hoony.adserver.config.TracingSupport;
 import io.hoony.adserver.domain.ad.AdStatus;
 import io.hoony.adserver.domain.ad.search.AdDocument;
 import io.hoony.adserver.domain.ad.search.AdSearchRepository;
+import io.micrometer.observation.ObservationRegistry;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.Pageable;
@@ -26,7 +28,11 @@ class DefaultAdCandidateSearchServiceStaleCacheTest {
     @DisplayName("캐시가 만료된 후 Elasticsearch 지연 시, lock을 얻지 못한 다른 스레드들은 기존 Stale 캐시를 즉시 반환한다")
     void testStaleWhileRevalidate() throws Exception {
         AdSearchRepository adSearchRepository = mock(AdSearchRepository.class);
-        DefaultAdCandidateSearchService service = new DefaultAdCandidateSearchService(adSearchRepository, 50); // 50ms TTL
+        DefaultAdCandidateSearchService service = new DefaultAdCandidateSearchService(
+                adSearchRepository,
+                new TracingSupport(ObservationRegistry.NOOP),
+                50
+        );
 
         AdDocument ad1 = AdDocument.builder().id(1L).maxBid(BigDecimal.valueOf(100)).status(AdStatus.ACTIVE).build();
         AdDocument ad2 = AdDocument.builder().id(2L).maxBid(BigDecimal.valueOf(200)).status(AdStatus.ACTIVE).build();

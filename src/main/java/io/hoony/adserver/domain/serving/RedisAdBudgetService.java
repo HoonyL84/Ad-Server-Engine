@@ -1,5 +1,6 @@
 package io.hoony.adserver.domain.serving;
 
+import io.hoony.adserver.config.TracingSupport;
 import io.hoony.adserver.domain.ad.search.AdDocument;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -63,16 +64,18 @@ public class RedisAdBudgetService implements AdBudgetService {
             """, Long.class);
 
     private final StringRedisTemplate redisTemplate;
+    private final TracingSupport tracingSupport;
     private final Clock clock;
     private final Random random;
 
     @Autowired
-    public RedisAdBudgetService(StringRedisTemplate redisTemplate) {
-        this(redisTemplate, Clock.systemDefaultZone(), new Random());
+    public RedisAdBudgetService(StringRedisTemplate redisTemplate, TracingSupport tracingSupport) {
+        this(redisTemplate, tracingSupport, Clock.systemDefaultZone(), new Random());
     }
 
-    RedisAdBudgetService(StringRedisTemplate redisTemplate, Clock clock, Random random) {
+    RedisAdBudgetService(StringRedisTemplate redisTemplate, TracingSupport tracingSupport, Clock clock, Random random) {
         this.redisTemplate = redisTemplate;
+        this.tracingSupport = tracingSupport;
         this.clock = clock;
         this.random = random;
     }
@@ -87,15 +90,16 @@ public class RedisAdBudgetService implements AdBudgetService {
             return false;
         }
 
-        Long remaining = redisTemplate.execute(
-                SPEND_SCRIPT,
-                List.of(remainingKey(ad), exhaustedKey(ad)),
-                String.valueOf(cost),
-                String.valueOf(initialRemaining),
-                String.valueOf(EXHAUSTED_TTL_SECONDS),
-                String.valueOf(timeRatio()),
-                String.valueOf(random.nextDouble())
-        );
+        Long remaining = tracingSupport.observe("ad.redis.budget.spend", () ->
+                redisTemplate.execute(
+                        SPEND_SCRIPT,
+                        List.of(remainingKey(ad), exhaustedKey(ad)),
+                        String.valueOf(cost),
+                        String.valueOf(initialRemaining),
+                        String.valueOf(EXHAUSTED_TTL_SECONDS),
+                        String.valueOf(timeRatio()),
+                        String.valueOf(random.nextDouble())
+                ));
 
         return remaining != null && remaining >= 0;
     }
@@ -119,7 +123,8 @@ public class RedisAdBudgetService implements AdBudgetService {
         }
 
         List<String> keys = ads.stream().map(this::exhaustedKey).toList();
-        List<String> values = redisTemplate.opsForValue().multiGet(keys);
+        List<String> values = tracingSupport.observe("ad.redis.budget.exhausted", () ->
+                redisTemplate.opsForValue().multiGet(keys));
 
         if (values == null) {
             return ads;

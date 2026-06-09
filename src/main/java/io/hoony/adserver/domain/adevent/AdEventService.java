@@ -1,5 +1,6 @@
 package io.hoony.adserver.domain.adevent;
 
+import io.hoony.adserver.config.TracingSupport;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -23,6 +24,7 @@ public class AdEventService {
     private final StringRedisTemplate redisTemplate;
     private final KafkaTemplate<String, Object> kafkaTemplate;
     private final AdEventMetrics adEventMetrics;
+    private final TracingSupport tracingSupport;
 
     @Value("${ad-server.events.kafka-publish-timeout-ms:50}")
     private long kafkaPublishTimeoutMs;
@@ -41,7 +43,8 @@ public class AdEventService {
         try {
             String topic = eventType == AdEventType.IMPRESSION ? "ad-impressions" : "ad-clicks";
             CompletableFuture<SendResult<String, Object>> sendResult =
-                    kafkaTemplate.send(topic, request.eventId(), request);
+                    tracingSupport.observe("ad.kafka.produce", "event.type", eventType.name(), () ->
+                            kafkaTemplate.send(topic, request.eventId(), request));
 
             sendResult.get(kafkaPublishTimeoutMs, TimeUnit.MILLISECONDS);
 

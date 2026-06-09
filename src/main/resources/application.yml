@@ -46,6 +46,10 @@ spring:
 
   kafka:
     bootstrap-servers: localhost:9092
+    template:
+      observation-enabled: true
+    listener:
+      observation-enabled: true
     producer:
       acks: all
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
@@ -105,3 +109,9 @@ management:
       percentiles:
         http.server.requests: 0.95,0.99
         ad.serving.duration: 0.95,0.99
+  tracing:
+    sampling:
+      probability: 1.0
+  otlp:
+    tracing:
+      endpoint: http://localhost:4318/v1/traces

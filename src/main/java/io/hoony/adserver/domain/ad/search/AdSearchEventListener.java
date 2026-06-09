@@ -1,6 +1,7 @@
 package io.hoony.adserver.domain.ad.search;
 
 import io.hoony.adserver.config.MdcTraceUtils;
+import io.hoony.adserver.config.TracingSupport;
 import io.hoony.adserver.domain.ad.event.AdEventPayload;
 import io.hoony.adserver.domain.ad.event.AdCreatedEvent;
 import io.hoony.adserver.domain.ad.event.AdUpdatedEvent;
@@ -24,18 +25,21 @@ public class AdSearchEventListener {
     private final AdDocumentMapper adDocumentMapper;
     private final AdBudgetService adBudgetService;
     private final AdSearchOutboxService adSearchOutboxService;
+    private final TracingSupport tracingSupport;
 
     @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handleAdCreatedEvent(AdCreatedEvent event) {
         MdcTraceUtils.withTraceContext(event.getPayload().traceContext(), () -> {
-            SyncResult result = sync(event.getPayload());
+            SyncResult result = tracingSupport.observe("ad.elasticsearch.sync", "event.type", "CREATED", () ->
+                    sync(event.getPayload()));
             if (!result.success()) {
-                adSearchOutboxService.enqueue(
-                        AdSearchOutboxEventType.CREATED,
-                        event.getPayload(),
-                        result.errorMessage()
-                );
+                tracingSupport.observe("ad.elasticsearch.outbox.enqueue", "event.type", "CREATED", () ->
+                        adSearchOutboxService.enqueue(
+                                AdSearchOutboxEventType.CREATED,
+                                event.getPayload(),
+                                result.errorMessage()
+                        ));
             }
         }).run();
     }
@@ -44,15 +48,17 @@ public class AdSearchEventListener {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handleAdUpdatedEvent(AdUpdatedEvent event) {
         MdcTraceUtils.withTraceContext(event.getPayload().traceContext(), () -> {
-            SyncResult result = sync(event.getPayload());
+            SyncResult result = tracingSupport.observe("ad.elasticsearch.sync", "event.type", "UPDATED", () ->
+                    sync(event.getPayload()));
             if (result.success()) {
                 adBudgetService.evictCache(event.getPayload().id());
             } else {
-                adSearchOutboxService.enqueue(
-                        AdSearchOutboxEventType.UPDATED,
-                        event.getPayload(),
-                        result.errorMessage()
-                );
+                tracingSupport.observe("ad.elasticsearch.outbox.enqueue", "event.type", "UPDATED", () ->
+                        adSearchOutboxService.enqueue(
+                                AdSearchOutboxEventType.UPDATED,
+                                event.getPayload(),
+                                result.errorMessage()
+                        ));
             }
         }).run();
     }

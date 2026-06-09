@@ -1,6 +1,8 @@
 package io.hoony.adserver.domain.serving;
 
+import io.hoony.adserver.config.TracingSupport;
 import io.hoony.adserver.domain.ad.search.AdDocument;
+import io.micrometer.observation.ObservationRegistry;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -39,6 +41,7 @@ class EvenPacingSimulationTest {
  
         RedisAdBudgetService budgetService = new RedisAdBudgetService(
                 redisTemplate,
+                new TracingSupport(ObservationRegistry.NOOP),
                 fixedNoonClock(),
                 fixedRandom(0.99)
         );
@@ -68,6 +71,7 @@ class EvenPacingSimulationTest {
  
         RedisAdBudgetService budgetService = new RedisAdBudgetService(
                 redisTemplate,
+                new TracingSupport(ObservationRegistry.NOOP),
                 fixedNoonClock(),
                 fixedRandom(0.99)
         );

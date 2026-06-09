@@ -1,8 +1,10 @@
 package io.hoony.adserver.domain.serving;
 
+import io.hoony.adserver.config.TracingSupport;
 import io.hoony.adserver.domain.ad.AdStatus;
 import io.hoony.adserver.domain.ad.search.AdDocument;
 import io.hoony.adserver.domain.ad.search.AdSearchRepository;
+import io.micrometer.observation.ObservationRegistry;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.Pageable;
@@ -21,7 +23,11 @@ import static org.mockito.Mockito.when;
 class DefaultAdCandidateSearchServiceTest {
 
     private final AdSearchRepository adSearchRepository = mock(AdSearchRepository.class);
-    private final DefaultAdCandidateSearchService service = new DefaultAdCandidateSearchService(adSearchRepository, 100);
+    private final DefaultAdCandidateSearchService service = new DefaultAdCandidateSearchService(
+            adSearchRepository,
+            new TracingSupport(ObservationRegistry.NOOP),
+            100
+    );
 
     @Test
     @DisplayName("ACTIVE 후보를 maxBid 내림차순으로 정렬한다.")

@@ -1,8 +1,10 @@
 package io.hoony.adserver.domain.adstatistic;
 
+import io.hoony.adserver.config.TracingSupport;
 import io.hoony.adserver.domain.ad.AdRepository;
 import io.hoony.adserver.domain.adevent.AdEventRepository;
 import io.hoony.adserver.domain.adevent.AdEventType;
+import io.micrometer.observation.ObservationRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -36,7 +38,13 @@ class AdStatisticServiceTest {
 
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
 
-        adStatisticService = new AdStatisticService(adStatisticRepository, adRepository, redisTemplate, adEventRepository);
+        adStatisticService = new AdStatisticService(
+                adStatisticRepository,
+                adRepository,
+                redisTemplate,
+                adEventRepository,
+                new TracingSupport(ObservationRegistry.NOOP)
+        );
     }
 
     @Test

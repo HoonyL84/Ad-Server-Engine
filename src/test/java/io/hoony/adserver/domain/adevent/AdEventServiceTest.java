@@ -1,5 +1,7 @@
 package io.hoony.adserver.domain.adevent;
 
+import io.hoony.adserver.config.TracingSupport;
+import io.micrometer.observation.ObservationRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -27,7 +29,12 @@ class AdEventServiceTest {
     @SuppressWarnings("unchecked")
     private final KafkaTemplate<String, Object> kafkaTemplate = mock(KafkaTemplate.class);
     private final AdEventMetrics adEventMetrics = new AdEventMetrics(new SimpleMeterRegistry());
-    private final AdEventService adEventService = new AdEventService(redisTemplate, kafkaTemplate, adEventMetrics);
+    private final AdEventService adEventService = new AdEventService(
+            redisTemplate,
+            kafkaTemplate,
+            adEventMetrics,
+            new TracingSupport(ObservationRegistry.NOOP)
+    );
 
     @BeforeEach
     void setUp() {
