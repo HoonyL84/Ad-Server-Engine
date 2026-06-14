@@ -120,6 +120,12 @@
 - **Observation Boundary**: Grafana는 이상 징후를 보고, Jaeger는 요청 내부 병목 구간을 따라가는 역할로 분리
 - **Smoke Verification**: 5 VU smoke 테스트와 Jaeger service/span 확인으로 tracing 추가 후 기본 서빙 흐름 검증
 
+#### 17. CDC / Debezium Deep Dive (Step 17)
+- **MySQL Binlog**: ROW 기반 binlog를 활성화해 테이블 변경 이벤트 수집 기반 구성
+- **Debezium / Kafka Connect**: `ad_search_outbox` 변경 이벤트를 Kafka topic으로 발행하는 로컬 CDC 경로 추가
+- **Scope Boundary**: 기존 Outbox-lite 복구 경로는 유지하고, CDC는 이벤트 스트림 확장 대안으로 분리
+- **CDC Verification**: connector와 task의 `RUNNING` 상태, CDC topic 생성 및 변경 이벤트 소비 확인
+
 ---
 
 ## Key Features
@@ -149,6 +155,7 @@ docker compose up -d prometheus grafana redis-exporter elasticsearch-exporter ja
 - Prometheus: `http://localhost:9091`
 - Grafana: `http://localhost:3000` (`admin` / `admin`)
 - Jaeger: `http://localhost:16686`
+- Kafka Connect: `http://localhost:8083`
 - App Metrics: `http://localhost:8080/actuator/prometheus`
 - Grafana Dashboard: `Ad Server > Ad Serving Overview`
 
@@ -183,6 +190,7 @@ Alert rule은 Prometheus의 `Alerts` 화면에서 확인할 수 있습니다.
 - **Vol 14.** [#14. 예산 소진 속도와 운영 리스크를 다시 점검하기](https://velog.io/@hoonyl/14.-%EC%98%88%EC%82%B0-%EC%86%8C%EC%A7%84-%EC%86%8D%EB%8F%84%EC%99%80-%EC%9A%B4%EC%98%81-%EB%A6%AC%EC%8A%A4%ED%81%AC%EB%A5%BC-%EB%8B%A4%EC%8B%9C-%EC%A0%90%EA%B2%80%ED%95%98%EA%B8%B0)
 - **Vol 15.** [#15. 실패한 데이터를 그냥 잃지 않도록 만들기](https://velog.io/@hoonyl/15.-%EC%8B%A4%ED%8C%A8%ED%95%9C-%EB%8D%B0%EC%9D%B4%ED%84%B0%EB%A5%BC-%EA%B7%B8%EB%83%A5-%EC%9E%83%EC%A7%80-%EC%95%8A%EB%8F%84%EB%A1%9D-%EB%A7%8C%EB%93%A4%EA%B8%B0)
 - **Vol 16.** [#16. 지표에서 보인 문제를 요청 흐름으로 따라가기](https://velog.io/@hoonyl/16.-%EC%A7%80%ED%91%9C%EC%97%90%EC%84%9C-%EB%B3%B4%EC%9D%B8-%EB%AC%B8%EC%A0%9C%EB%A5%BC-%EC%9A%94%EC%B2%AD-%ED%9D%90%EB%A6%84%EC%9C%BC%EB%A1%9C-%EB%94%B0%EB%9D%BC%EA%B0%80%EA%B8%B0)
+- **Vol 17.** [#17. 변경 이벤트를 DB 밖으로 흘려보내는 방법 검토하기](https://velog.io/@hoonyl/17.-%EB%B3%80%EA%B2%BD-%EC%9D%B4%EB%B2%A4%ED%8A%B8%EB%A5%BC-DB-%EB%B0%96%EC%9C%BC%EB%A1%9C-%ED%9D%98%EB%A0%A4%EB%B3%B4%EB%82%B4%EB%8A%94-%EB%B0%A9%EB%B2%95-%EA%B2%80%ED%86%A0%ED%95%98%EA%B8%B0)
 
 ---
 
