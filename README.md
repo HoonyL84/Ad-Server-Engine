@@ -97,26 +97,26 @@
 - **Warm-up & Preservation**: Redis 캐시 미스 시 DB(`ad_statistic`)에서 보완하며, 벌크 조회 시에도 Redis의 기존 부분 캐시 카운팅이 DB 값에 의해 유실 및 덮어쓰기 되지 않도록 보존 처리
 - **Smoothed CTR Calculation**: 극소 표본 편향 방지를 위해 스무딩 계산식 적용 `(clicks + alpha) / (impressions + beta)`
 - **CTR-weight Ranking**: `CtrWeightAdRanker`를 통해 `maxBid * smoothedCtr` 방식의 랭킹 선택 가능 설계 (기본 maxBid 전략과 다형성 스위칭 가능)
-- **Data Realign Batch**: Kafka DB 적재 후 Redis 카운팅 실패 엣지케이스의 불일치를 새벽 3시 배치(`realignStatisticsFromEventLedger()`)로 물리적 이벤트 원장 기반 보정 경로 마련
+- **Data Realign Batch**: Kafka DB 적재 후 Redis 카운팅 실패 엣지케이스를 확인하기 위해 새벽 3시 배치(`realignStatisticsFromEventLedger()`)로 이벤트 적재 기록 기반 통계 재집계 경로 마련
 
 #### 14. Budget Pacing & Operational Hardening (Step 14)
 - **Budget Pacing**: 시간 대비 예산 소진 속도를 기준으로 과소진 광고의 노출을 확률적으로 제어
 - **DMP Circuit Breaker**: DMP 연속 실패 시 호출을 즉시 차단해 불필요한 대기 시간을 줄이는 fail-fast 구조 추가
 - **Stale Candidate Cache**: Elasticsearch 후보 캐시 갱신 지연 시 기존 캐시를 반환해 tail latency 확산을 완화
 - **Async Indexing Guard**: 광고 변경 이벤트를 payload snapshot으로 분리하고, ES 색인 성공 이후 Redis 예산 캐시 무효화
-- **Statistic Sync Hardening**: Redis 통계 동기화와 이벤트 원장 보정 배치에서 반복 조회를 줄이고 벌크 조회/집계 기반으로 개선
+- **Statistic Sync Hardening**: Redis 통계 동기화와 이벤트 적재 기록 기반 재집계 배치에서 반복 조회를 줄이고 벌크 조회/집계 기반으로 개선
 
 #### 15. Reliability Hardening (Step 15)
 - **Kafka DLQ**: 이벤트 Consumer 반복 실패 시 실패 payload를 `ad-events-dlq`로 격리해 후속 복구 출발점 마련
 - **ES Outbox-lite**: 비동기 Elasticsearch 색인 최종 실패 시 payload snapshot을 outbox에 저장하고 scheduler로 재처리
-- **Statistic Realign Chunking**: 이벤트 원장 기반 통계 보정 배치를 광고 ID 청크 단위로 나누어 메모리 부담 완화
+- **Statistic Realign Chunking**: 이벤트 적재 기록 기반 통계 재집계 배치를 광고 ID 청크 단위로 나누어 메모리 부담 완화
 - **Circuit Breaker Jitter**: scale-out 환경에서 여러 Pod가 동시에 DMP 복구 요청을 보내는 상황을 줄이기 위해 backoff jitter 적용
 - **Reliability Smoke Test**: 50 VU 이벤트 포함 회귀 테스트로 서빙/이벤트 수집 흐름, DLQ 발생 여부, consumer lag 관측
 
 #### 16. Distributed Tracing (Step 16)
 - **OpenTelemetry / Jaeger**: 로컬 Jaeger로 광고 서빙 요청의 내부 처리 구간 trace 확인
 - **Serving Span 분리**: DMP 조회, 후보 조회, Elasticsearch 조회, 타겟 매칭, 랭킹, Redis 예산 차감 구간을 span으로 분리
-- **Kafka / Batch Trace**: 이벤트 발행/소비와 통계 동기화/보정 배치 구간에도 trace 추가
+- **Kafka / Batch Trace**: 이벤트 발행/소비와 통계 동기화/재집계 배치 구간에도 trace 추가
 - **Observation Boundary**: Grafana는 이상 징후를 보고, Jaeger는 요청 내부 병목 구간을 따라가는 역할로 분리
 - **Smoke Verification**: 5 VU smoke 테스트와 Jaeger service/span 확인으로 tracing 추가 후 기본 서빙 흐름 검증
 
@@ -142,7 +142,7 @@
 - **Distributed Tracing**: OpenTelemetry/Jaeger 기반으로 요청 내부 구간별 처리 시간 확인
 - **K8s Readiness**: K8s 위에서 실행, 상태 점검, self-healing, scale-out 준비 조건 확인
 - **Event Pipeline**: 노출/클릭 이벤트를 Kafka로 분리해 사용자 응답 경로와 저장 경로를 분리
-- **Operational Hardening**: 서킷 브레이커, stale cache, 예산 페이싱, 통계 보정 경로로 운영 리스크를 단계적으로 축소
+- **Operational Hardening**: 서킷 브레이커, stale cache, 예산 페이싱, 통계 재집계 경로로 운영 리스크를 단계적으로 축소
 
 ---
 
