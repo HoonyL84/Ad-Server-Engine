@@ -10,12 +10,20 @@ import java.util.List;
 public class DefaultAdMatcher implements AdMatcher {
 
     @Override
-    public List<AdDocument> match(List<AdDocument> candidates, UserProfile profile) {
+    public List<AdDocument> match(List<AdDocument> candidates, UserProfile profile, String slotId) {
         return candidates.stream()
+                .filter(ad -> slotMatches(ad.getInterestTags(), slotId))
                 .filter(ad -> genderMatches(ad.getTargetGender(), profile.gender()))
                 .filter(ad -> locationMatches(ad.getTargetLocationId(), profile.locationId()))
                 .filter(ad -> interestMatches(ad.getInterestTags(), profile.tags()))
                 .toList();
+    }
+
+    private boolean slotMatches(List<String> adTags, String slotId) {
+        if (adTags == null || adTags.isEmpty()) {
+            return true;
+        }
+        return adTags.stream().anyMatch(tag -> tag.equalsIgnoreCase(slotId));
     }
 
     private boolean genderMatches(String adGender, String userGender) {

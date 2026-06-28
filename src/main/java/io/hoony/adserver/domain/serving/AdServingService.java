@@ -115,7 +115,7 @@ public class AdServingService {
 
             if (profileResult.reason == ServingFallbackReason.NONE) {
                 List<AdDocument> filtered = tracingSupport.observe("ad.target.match", "slot.id", slotId, () ->
-                        adMatcher.match(candidates, profileResult.profile.orElseThrow()));
+                        adMatcher.match(candidates, profileResult.profile.orElseThrow(), slotId));
                 log.debug("Target matching completed. slotId={}, candidateCount={}, matchedCount={}",
                         slotId, candidates.size(), filtered.size());
                 if (!filtered.isEmpty()) {

@@ -7,5 +7,5 @@ import java.util.List;
 
 public interface AdMatcher {
 
-    List<AdDocument> match(List<AdDocument> candidates, UserProfile profile);
+    List<AdDocument> match(List<AdDocument> candidates, UserProfile profile, String slotId);
 }
