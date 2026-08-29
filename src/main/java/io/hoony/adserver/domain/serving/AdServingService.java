@@ -25,6 +25,7 @@ public class AdServingService {
 
     private final UserProfileClient userProfileClient;
     private final AdCandidateSearchService adCandidateSearchService;
+    private final AdSlotMatcher adSlotMatcher;
     private final AdMatcher adMatcher;
     private final AdRanker adRanker;
     private final AdBudgetService adBudgetService;
@@ -38,6 +39,7 @@ public class AdServingService {
     public AdServingService(
             UserProfileClient userProfileClient,
             AdCandidateSearchService adCandidateSearchService,
+            AdSlotMatcher adSlotMatcher,
             AdMatcher adMatcher,
             Map<String, AdRanker> adRankers,
             @Value("${ad-server.serving.ranking-strategy:max-bid}") String rankingStrategy,
@@ -51,6 +53,7 @@ public class AdServingService {
     ) {
         this.userProfileClient = userProfileClient;
         this.adCandidateSearchService = adCandidateSearchService;
+        this.adSlotMatcher = adSlotMatcher;
         this.adMatcher = adMatcher;
 
         this.adRanker = adRankers.get(rankingStrategy);
@@ -105,7 +108,9 @@ public class AdServingService {
 
             List<AdDocument> candidates = candidateResult.candidates;
             log.debug("Candidate lookup completed. slotId={}, candidateCount={}", slotId, candidates.size());
-            if (candidates.isEmpty()) {
+            List<AdDocument> slotCandidates = tracingSupport.observe("ad.slot.match", "slot.id", slotId, () ->
+                    adSlotMatcher.match(candidates, slotId));
+            if (slotCandidates.isEmpty()) {
                 log.debug("Serving fallback. slotId={}, reason={}", slotId, ServingFallbackReason.NO_CANDIDATE);
                 return new AdServingResult(null, true, ServingFallbackReason.NO_CANDIDATE, 0, 0);
             }
@@ -115,16 +120,16 @@ public class AdServingService {
 
             if (profileResult.reason == ServingFallbackReason.NONE) {
                 List<AdDocument> filtered = tracingSupport.observe("ad.target.match", "slot.id", slotId, () ->
-                        adMatcher.match(candidates, profileResult.profile.orElseThrow(), slotId));
+                        adMatcher.match(slotCandidates, profileResult.profile.orElseThrow()));
                 log.debug("Target matching completed. slotId={}, candidateCount={}, matchedCount={}",
-                        slotId, candidates.size(), filtered.size());
+                        slotId, slotCandidates.size(), filtered.size());
                 if (!filtered.isEmpty()) {
-                    return selectSpendableAd(filtered, false, ServingFallbackReason.NONE, candidates.size(), filtered.size());
+                    return selectSpendableAd(filtered, false, ServingFallbackReason.NONE, slotCandidates.size(), filtered.size());
                 }
-                return selectSpendableAd(candidates, true, ServingFallbackReason.TARGET_NOT_MATCHED, candidates.size(), 0);
+                return selectSpendableAd(slotCandidates, true, ServingFallbackReason.TARGET_NOT_MATCHED, slotCandidates.size(), 0);
             }
 
-            return selectSpendableAd(candidates, true, profileResult.reason, candidates.size(), 0);
+            return selectSpendableAd(slotCandidates, true, profileResult.reason, slotCandidates.size(), 0);
         } catch (RuntimeException e) {
             log.warn("Serving failed unexpectedly. userId={}, slotId={}", userId, slotId, e);
             return new AdServingResult(null, true, ServingFallbackReason.CANDIDATE_ERROR, 0, 0);

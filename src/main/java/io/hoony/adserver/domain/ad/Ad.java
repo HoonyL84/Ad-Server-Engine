@@ -79,10 +79,14 @@ public class Ad extends BaseTimeEntity {
     @Column(name = "target_interest_tags")
     private String targetInterestTags;
 
+    @Column(name = "target_slot_ids")
+    private String targetSlotIds;
+
     @Builder
     public Ad(String title, String imageUrl, String clickUrl, Advertiser advertiser, BigDecimal maxBid, BigDecimal totalBudget,
               BigDecimal spentAmount, LocalDateTime startDate, LocalDateTime endDate, AdStatus status,
-              Map<String, Object> targetContext, String targetGender, String targetLocationId, String targetInterestTags) {
+              Map<String, Object> targetContext, String targetGender, String targetLocationId, String targetInterestTags,
+              String targetSlotIds) {
         this.title = title;
         this.imageUrl = imageUrl;
         this.clickUrl = clickUrl;
@@ -97,6 +101,7 @@ public class Ad extends BaseTimeEntity {
         this.targetGender = targetGender;
         this.targetLocationId = targetLocationId;
         this.targetInterestTags = targetInterestTags;
+        this.targetSlotIds = targetSlotIds;
     }
 
     public void updateTargetContext(Map<String, Object> newContext) {

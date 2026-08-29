@@ -31,6 +31,7 @@ class AdSearchRepositoryTest {
                 .targetGender("MALE")
                 .targetLocationId("1:11")
                 .interestTags(List.of("fashion", "shoes"))
+                .slotIds(List.of("fashion"))
                 .targetContext(Map.of("age", 25))
                 .build();
 
@@ -43,6 +44,13 @@ class AdSearchRepositoryTest {
         assertThat(results).isNotEmpty();
         assertThat(results.get(0).getTitle()).isEqualTo("테스트 광고");
         assertThat(results.get(0).getInterestTags()).containsExactly("fashion", "shoes");
+
+        List<AdDocument> slotResults = adSearchRepository.findByStatusAndSlotIdsIn(
+                AdStatus.ACTIVE,
+                List.of("fashion", AdDocument.ALL_SLOTS),
+                org.springframework.data.domain.PageRequest.of(0, 200)
+        );
+        assertThat(slotResults).extracting(AdDocument::getId).contains(1L);
         
         adSearchRepository.delete(ad);
     }

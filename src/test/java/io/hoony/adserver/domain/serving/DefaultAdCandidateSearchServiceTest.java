@@ -36,14 +36,19 @@ class DefaultAdCandidateSearchServiceTest {
         AdDocument high = ad(2L, "3000");
         AdDocument mid = ad(3L, "2000");
 
-        when(adSearchRepository.findByStatus(eq(AdStatus.ACTIVE), any(Pageable.class)))
+        when(adSearchRepository.findByStatusAndSlotIdsIn(
+                eq(AdStatus.ACTIVE),
+                eq(List.of("home", AdDocument.ALL_SLOTS)),
+                any(Pageable.class)
+        ))
                 .thenReturn(List.of(high, mid, low));
 
         List<AdDocument> result = service.searchCandidates("home");
 
         assertThat(result).extracting(AdDocument::getId).containsExactly(2L, 3L, 1L);
-        verify(adSearchRepository).findByStatus(
+        verify(adSearchRepository).findByStatusAndSlotIdsIn(
                 eq(AdStatus.ACTIVE),
+                eq(List.of("home", AdDocument.ALL_SLOTS)),
                 org.mockito.ArgumentMatchers.argThat(pageable ->
                         pageable.getPageNumber() == 0
                                 && pageable.getPageSize() == 200
@@ -54,22 +59,46 @@ class DefaultAdCandidateSearchServiceTest {
     }
 
     @Test
-    @DisplayName("짧은 TTL 안에서는 ES 후보 조회 결과를 재사용한다.")
-    void reusesCandidatesWithinShortTtl() {
+    @DisplayName("짧은 TTL 안에서는 같은 지면의 ES 후보만 재사용한다.")
+    void reusesCandidatesWithinShortTtlPerSlot() {
         AdDocument high = ad(2L, "3000");
         AdDocument mid = ad(3L, "2000");
 
-        when(adSearchRepository.findByStatus(eq(AdStatus.ACTIVE), any(Pageable.class)))
+        when(adSearchRepository.findByStatusAndSlotIdsIn(
+                eq(AdStatus.ACTIVE),
+                eq(List.of("fashion", AdDocument.ALL_SLOTS)),
+                any(Pageable.class)
+        ))
                 .thenReturn(List.of(high, mid));
 
         List<AdDocument> first = service.searchCandidates("fashion");
-        List<AdDocument> second = service.searchCandidates("local");
-        List<AdDocument> third = service.searchCandidates("home");
+        List<AdDocument> second = service.searchCandidates("fashion");
 
         assertThat(first).extracting(AdDocument::getId).containsExactly(2L, 3L);
         assertThat(second).extracting(AdDocument::getId).containsExactly(2L, 3L);
-        assertThat(third).extracting(AdDocument::getId).containsExactly(2L, 3L);
-        verify(adSearchRepository, times(1)).findByStatus(eq(AdStatus.ACTIVE), any(Pageable.class));
+        verify(adSearchRepository, times(1)).findByStatusAndSlotIdsIn(
+                eq(AdStatus.ACTIVE),
+                eq(List.of("fashion", AdDocument.ALL_SLOTS)),
+                any(Pageable.class)
+        );
+    }
+
+    @Test
+    @DisplayName("서로 다른 지면은 후보 캐시와 ES 조회를 공유하지 않는다.")
+    void separatesCandidateCacheBySlot() {
+        when(adSearchRepository.findByStatusAndSlotIdsIn(
+                eq(AdStatus.ACTIVE),
+                eq(List.of("fashion", AdDocument.ALL_SLOTS)),
+                any(Pageable.class)
+        )).thenReturn(List.of(ad(1L, "3000")));
+        when(adSearchRepository.findByStatusAndSlotIdsIn(
+                eq(AdStatus.ACTIVE),
+                eq(List.of("home", AdDocument.ALL_SLOTS)),
+                any(Pageable.class)
+        )).thenReturn(List.of(ad(2L, "2000")));
+
+        assertThat(service.searchCandidates("fashion")).extracting(AdDocument::getId).containsExactly(1L);
+        assertThat(service.searchCandidates("home")).extracting(AdDocument::getId).containsExactly(2L);
     }
 
     private AdDocument ad(Long id, String bid) {
@@ -82,6 +111,7 @@ class DefaultAdCandidateSearchServiceTest {
                 .targetGender("ALL")
                 .targetLocationId("0")
                 .interestTags(List.of())
+                .slotIds(List.of(AdDocument.ALL_SLOTS))
                 .build();
     }
 }

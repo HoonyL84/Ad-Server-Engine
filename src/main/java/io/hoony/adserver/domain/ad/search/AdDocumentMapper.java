@@ -24,6 +24,7 @@ public class AdDocumentMapper {
                 .targetGender(ad.getTargetGender())
                 .targetLocationId(ad.getTargetLocationId())
                 .interestTags(parseTags(ad.getTargetInterestTags()))
+                .slotIds(parseSlotIds(ad.getTargetSlotIds()))
                 .targetContext(ad.getTargetContext())
                 .build();
     }
@@ -42,6 +43,7 @@ public class AdDocumentMapper {
                 .targetGender(payload.targetGender())
                 .targetLocationId(payload.targetLocationId())
                 .interestTags(parseTags(payload.targetInterestTags()))
+                .slotIds(parseSlotIds(payload.targetSlotIds()))
                 .targetContext(payload.targetContext())
                 .build();
     }
@@ -54,5 +56,13 @@ public class AdDocumentMapper {
                 .map(String::trim)
                 .filter(tag -> !tag.isBlank())
                 .toList();
+    }
+
+    private List<String> parseSlotIds(String slotIds) {
+        List<String> parsed = parseTags(slotIds).stream()
+                .map(String::toLowerCase)
+                .distinct()
+                .toList();
+        return parsed.isEmpty() ? List.of(AdDocument.ALL_SLOTS) : parsed;
     }
 }

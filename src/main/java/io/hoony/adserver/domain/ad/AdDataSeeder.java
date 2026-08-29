@@ -26,6 +26,7 @@ public class AdDataSeeder implements CommandLineRunner {
 
     private static final int TOTAL_ADS = 3000;
     private static final int BATCH_SIZE = 1000;
+    private static final String ALL_SLOTS = "*";
 
     private static final List<String> LOCATION_POOL = List.of(
             "1:11", "1:12", "1:13", "1:14", "2:21", "2:22", "3:31", "4:41", "5:51", "9:99", "0"
@@ -69,8 +70,8 @@ public class AdDataSeeder implements CommandLineRunner {
         String sql = """
                 INSERT INTO ad
                 (advertiser_id, title, image_url, click_url, max_bid, total_budget, spent_amount, start_date, status,
-                 target_gender, target_location_id, target_interest_tags, target_context, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 target_gender, target_location_id, target_interest_tags, target_slot_ids, target_context, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """;
 
         ThreadLocalRandom random = ThreadLocalRandom.current();
@@ -95,6 +96,7 @@ public class AdDataSeeder implements CommandLineRunner {
                     randomGender(random, persona),
                     randomLocation(random, persona),
                     randomTags(random, persona),
+                    targetSlotIds(persona),
                     "{}",
                     now,
                     now
@@ -174,5 +176,14 @@ public class AdDataSeeder implements CommandLineRunner {
         }
 
         return String.join(",", new HashSet<>(tags));
+    }
+
+    private String targetSlotIds(PersonaType persona) {
+        return switch (persona) {
+            case FASHION -> "fashion";
+            case LOCAL -> "local";
+            case HOME -> "home";
+            case GENERAL -> ALL_SLOTS;
+        };
     }
 }

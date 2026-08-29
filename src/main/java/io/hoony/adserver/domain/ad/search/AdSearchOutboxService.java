@@ -2,6 +2,7 @@ package io.hoony.adserver.domain.ad.search;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.hoony.adserver.config.MdcTraceUtils;
+import io.hoony.adserver.config.TracingSupport;
 import io.hoony.adserver.domain.ad.event.AdEventPayload;
 import io.hoony.adserver.domain.serving.AdBudgetService;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +24,7 @@ public class AdSearchOutboxService {
     private final AdSearchRepository adSearchRepository;
     private final AdDocumentMapper adDocumentMapper;
     private final AdBudgetService adBudgetService;
+    private final TracingSupport tracingSupport;
 
     @Value("${ad-server.search-outbox.max-attempts:5}")
     private int maxAttempts;
@@ -40,6 +42,10 @@ public class AdSearchOutboxService {
     @Scheduled(fixedDelayString = "${ad-server.search-outbox.retry-delay-ms:30000}")
     @Transactional
     public void retryPending() {
+        tracingSupport.observe("ad.search.outbox.retry", this::doRetryPending);
+    }
+
+    private void doRetryPending() {
         LocalDateTime now = LocalDateTime.now();
         var items = outboxRepository.findTop50ByStatusAndNextRetryAtLessThanEqualOrderByIdAsc(
                 AdSearchOutboxStatus.PENDING,

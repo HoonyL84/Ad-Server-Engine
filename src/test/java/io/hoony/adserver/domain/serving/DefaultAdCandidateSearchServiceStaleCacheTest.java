@@ -38,7 +38,11 @@ class DefaultAdCandidateSearchServiceStaleCacheTest {
         AdDocument ad2 = AdDocument.builder().id(2L).maxBid(BigDecimal.valueOf(200)).status(AdStatus.ACTIVE).build();
 
         // 1. First invocation (Initial cache load, forces sync lock to populate empty cache)
-        when(adSearchRepository.findByStatus(eq(AdStatus.ACTIVE), any(Pageable.class)))
+        when(adSearchRepository.findByStatusAndSlotIdsIn(
+                eq(AdStatus.ACTIVE),
+                eq(List.of("home", AdDocument.ALL_SLOTS)),
+                any(Pageable.class)
+        ))
                 .thenReturn(List.of(ad1));
 
         List<AdDocument> firstLoad = service.searchCandidates("home");
@@ -52,7 +56,11 @@ class DefaultAdCandidateSearchServiceStaleCacheTest {
         CountDownLatch esQueryLatch = new CountDownLatch(1);
         CountDownLatch threadStartLatch = new CountDownLatch(1);
 
-        when(adSearchRepository.findByStatus(eq(AdStatus.ACTIVE), any(Pageable.class)))
+        when(adSearchRepository.findByStatusAndSlotIdsIn(
+                eq(AdStatus.ACTIVE),
+                eq(List.of("home", AdDocument.ALL_SLOTS)),
+                any(Pageable.class)
+        ))
                 .thenAnswer(invocation -> {
                     threadStartLatch.countDown();
                     esQueryLatch.await(5, TimeUnit.SECONDS); // Block thread holding lock

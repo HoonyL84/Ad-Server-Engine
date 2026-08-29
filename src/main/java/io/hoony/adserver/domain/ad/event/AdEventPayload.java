@@ -20,6 +20,7 @@ public record AdEventPayload(
         String targetGender,
         String targetLocationId,
         String targetInterestTags,
+        String targetSlotIds,
         Map<String, Object> targetContext,
         Map<String, String> traceContext
 ) {
@@ -37,6 +38,7 @@ public record AdEventPayload(
                 ad.getTargetGender(),
                 ad.getTargetLocationId(),
                 ad.getTargetInterestTags(),
+                ad.getTargetSlotIds(),
                 ad.getTargetContext(),
                 MDC.getCopyOfContextMap()
         );

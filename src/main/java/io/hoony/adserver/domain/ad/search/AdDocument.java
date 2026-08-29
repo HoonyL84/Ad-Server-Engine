@@ -24,6 +24,8 @@ import java.util.Map;
 @Setting(shards = 1, replicas = 0)
 public class AdDocument {
 
+    public static final String ALL_SLOTS = "*";
+
     @Id
     private Long id;
 
@@ -59,6 +61,9 @@ public class AdDocument {
 
     @Field(type = FieldType.Keyword)
     private List<String> interestTags;
+
+    @Field(type = FieldType.Keyword)
+    private List<String> slotIds;
 
     @Field(type = FieldType.Object)
     private Map<String, Object> targetContext;

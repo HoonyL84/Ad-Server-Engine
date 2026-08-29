@@ -28,6 +28,7 @@ class AdServingServiceTest {
 
     private final UserProfileClient userProfileClient = mock(UserProfileClient.class);
     private final AdCandidateSearchService candidateSearchService = mock(AdCandidateSearchService.class);
+    private final AdSlotMatcher adSlotMatcher = new DefaultAdSlotMatcher();
     private final AdMatcher adMatcher = new DefaultAdMatcher();
     private final AdRanker adRanker = new MaxBidAdRanker();
     private final AdBudgetService adBudgetService = mock(AdBudgetService.class);
@@ -54,6 +55,7 @@ class AdServingServiceTest {
         return new AdServingService(
                 userProfileClient,
                 candidateSearchService,
+                adSlotMatcher,
                 adMatcher,
                 java.util.Map.of("max-bid", adRanker),
                 "max-bid",
@@ -255,7 +257,55 @@ class AdServingServiceTest {
         verify(userProfileClient, never()).getUserProfile(any());
     }
 
+    @Test
+    @DisplayName("프로필이 없어도 요청 지면과 다른 광고는 fallback에서 제외한다")
+    void keepsProfileFallbackInsideRequestedSlot() {
+        AdServingService service = createService(30, 50);
+        AdDocument wrongSlot = ad(1L, "ALL", "0", List.of("fashion"), List.of("local"), "5000");
+        AdDocument home = ad(2L, "ALL", "0", List.of("finance"), List.of("home"), "3000");
+
+        when(userProfileClient.getUserProfile("missing")).thenReturn(Optional.empty());
+        when(candidateSearchService.searchCandidates("home")).thenReturn(List.of(wrongSlot, home));
+        when(adBudgetService.trySpend(any())).thenReturn(true);
+
+        AdServingResult result = service.serve("missing", "home");
+
+        assertThat(result.fallbackReason()).isEqualTo(ServingFallbackReason.PROFILE_NOT_FOUND);
+        assertThat(result.selectedAd().getId()).isEqualTo(2L);
+        assertThat(result.candidateCount()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("타겟 미매칭 fallback도 요청 지면 후보 안에서만 선택한다")
+    void keepsTargetFallbackInsideRequestedSlot() {
+        AdServingService service = createService(30, 50);
+        UserProfile profile = new UserProfile("1", "M", "1:11", 29, List.of("fashion"));
+        AdDocument wrongSlot = ad(1L, "F", "2:21", List.of("interior"), List.of("local"), "5000");
+        AdDocument home = ad(2L, "F", "2:21", List.of("interior"), List.of("home"), "3000");
+
+        when(userProfileClient.getUserProfile("1")).thenReturn(Optional.of(profile));
+        when(candidateSearchService.searchCandidates("home")).thenReturn(List.of(wrongSlot, home));
+        when(adBudgetService.trySpend(any())).thenReturn(true);
+
+        AdServingResult result = service.serve("1", "home");
+
+        assertThat(result.fallbackReason()).isEqualTo(ServingFallbackReason.TARGET_NOT_MATCHED);
+        assertThat(result.selectedAd().getId()).isEqualTo(2L);
+        assertThat(result.candidateCount()).isEqualTo(1);
+    }
+
     private AdDocument ad(Long id, String gender, String locationId, List<String> tags, String bid) {
+        return ad(id, gender, locationId, tags, List.of("home"), bid);
+    }
+
+    private AdDocument ad(
+            Long id,
+            String gender,
+            String locationId,
+            List<String> interestTags,
+            List<String> slotIds,
+            String bid
+    ) {
         return AdDocument.builder()
                 .id(id)
                 .advertiserId(1L)
@@ -266,7 +316,8 @@ class AdServingServiceTest {
                 .status(AdStatus.ACTIVE)
                 .targetGender(gender)
                 .targetLocationId(locationId)
-                .interestTags(tags)
+                .interestTags(interestTags)
+                .slotIds(slotIds)
                 .build();
     }
 }

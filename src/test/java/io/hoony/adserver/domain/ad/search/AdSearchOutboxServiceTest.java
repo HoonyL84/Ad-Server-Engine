@@ -1,6 +1,8 @@
 package io.hoony.adserver.domain.ad.search;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.hoony.adserver.config.TracingSupport;
+import io.micrometer.observation.ObservationRegistry;
 import io.hoony.adserver.domain.ad.AdStatus;
 import io.hoony.adserver.domain.ad.event.AdEventPayload;
 import io.hoony.adserver.domain.serving.AdBudgetService;
@@ -30,7 +32,8 @@ class AdSearchOutboxServiceTest {
             objectMapper,
             adSearchRepository,
             adDocumentMapper,
-            adBudgetService
+            adBudgetService,
+            new TracingSupport(ObservationRegistry.NOOP)
     );
 
     @Test
@@ -83,6 +86,7 @@ class AdSearchOutboxServiceTest {
                 "ALL",
                 "0",
                 "",
+                "home",
                 Map.of(),
                 Map.of("traceId", "test-trace")
         );

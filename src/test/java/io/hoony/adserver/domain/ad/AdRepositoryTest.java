@@ -54,6 +54,7 @@ class AdRepositoryTest {
                 .targetGender("MALE")
                 .targetLocationId("1:11")
                 .targetInterestTags("ELECTRONICS")
+                .targetSlotIds("home,fashion")
                 .targetContext(targetContext)
                 .build();
 
@@ -65,6 +66,7 @@ class AdRepositoryTest {
         assertThat(foundAd.getAdvertiser().getName()).isEqualTo("삼성전자");
         assertThat(foundAd.getMaxBid().compareTo(new BigDecimal("100.00"))).isZero();
         assertThat(foundAd.getTargetContext().get("region")).isEqualTo("SEOUL");
+        assertThat(foundAd.getTargetSlotIds()).isEqualTo("home,fashion");
         
         @SuppressWarnings("unchecked")
         Map<String, Integer> ageRange = (Map<String, Integer>) foundAd.getTargetContext().get("age_range");
