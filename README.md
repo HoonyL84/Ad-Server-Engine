@@ -1,5 +1,7 @@
 # Ad Server Engine
 
+> Java 21 · Spring Boot 3.4 · Elasticsearch · Redis · Kafka · Debezium · OpenTelemetry/Jaeger · k6
+
 트래픽 증가 상황에서 광고 응답 지연과 외부 의존성 문제를 줄이기 위해,  
 실시간 광고 서빙 구조를 설계하고 구현하는 프로젝트입니다.
 
@@ -17,116 +19,114 @@
 
 ## Engineering Milestones
 
-### Phase 1: 개발 준비 및 도메인 구축
-
-#### 1. Core Environment (Step 1)
+### 1. Core Environment (Step 1)
 - **Java 21 & Virtual Threads**: I/O 바운드 작업 최적화를 위한 최신 런타임 환경 구축
 - **Infrastructure**: Docker Compose 기반의 MySQL, Redis, Kafka 핵심 인프라 셋업
 
-#### 2. Interface Definition (Step 2)
+### 2. Interface Definition (Step 2)
 - **DMP Integration**: gRPC(Protobuf 3)를 활용한 외부 유저 프로필 연동 규격 정의
 - **장애 격리**: 외부 의존성과의 명확한 도메인 경계 설정
 
-#### 3. Domain Readiness (Step 3)
+### 3. Domain Readiness (Step 3)
 - **2-Tier Modeling**: 서빙 시점의 Join 제거를 위한 Advertiser-Ad 2계층 구조 확립
 - **Hybrid Targeting**: 성별, 지역(계층형 ID), 관심사별 고속 필터링을 위한 스키마 설계
 - **Development Seeding**: 로컬 검증을 위한 3,000건 이상의 광고 데이터 적재 환경 구성
 - **Mock DMP Infrastructure**: 유저 프로필 조회 시뮬레이션을 위한 100,000명의 유저 데이터 구성
 
-#### 4. Search Synchronization (Step 4)
+### 4. Search Synchronization (Step 4)
 - **AdDocument Mapping**: Elasticsearch 전용 문서 모델과 검색 리포지토리 정의
 - **Event-driven Indexing**: 광고 생성 트랜잭션 커밋 이후 ES 비동기 색인 처리
 - **Bulk Sync API**: 초기 정합성 확보를 위한 MySQL->Elasticsearch 일괄 동기화 API 제공
 
-#### 5. Serving Orchestration (Step 5)
+### 5. Serving Orchestration (Step 5)
 - **Parallel Lookup**: DMP 유저 프로필 조회와 Elasticsearch 광고 후보 조회를 Virtual Thread 기반으로 병렬 실행
 - **DMP Timeout & Fallback**: 유저 프로필 조회에 기본 30ms 타임아웃을 두고, 초과/실패 시 광고 후보 기반 fallback 응답 제공
 - **Fallback Reason 분리**: `PROFILE_NOT_FOUND`, `DMP_TIMEOUT`, `TARGET_NOT_MATCHED`, `NO_CANDIDATE` 등으로 장애와 데이터 부족 상황을 구분
 - **Implementation Timeline**: Step 5에서 gRPC 계약과 fallback 분기를 먼저 고정하고, 이후 실제 gRPC 호출 경로를 보강한 뒤 동일 시나리오를 재검증
 - **Target Matching**: 성별, 지역, 관심사 기준 매칭은 후보 조회 이후 `AdMatcher`에서 수행
 
-#### 6. Matching & Ranking Boundary (Step 6)
+### 6. Matching & Ranking Boundary (Step 6)
 - **L1 Candidate Search**: Elasticsearch 서버 사이드 `sort + limit`으로 ACTIVE 광고 후보를 최대 200개까지 조회
 - **L2 Target Matching**: `AdMatcher`로 성별, 지역, 관심사 매칭 책임 분리
 - **Ranking Boundary**: `AdRanker`로 최종 선택 책임을 분리하고, 현재는 기본 `maxBid` 기준으로 선택
 - **Fallback Expansion**: `CANDIDATE_TIMEOUT`, `CANDIDATE_ERROR` 추가로 후보 조회 실패 원인 구분
 - **Serving Safety**: DMP 조회뿐 아니라 후보 조회에도 timeout을 두고, 검색 문서 변환은 `AdDocumentMapper`로 단일화
 
-#### 7. Budget Control (Step 7)
+### 7. Budget Control (Step 7)
 - **Budget Guard**: 예산 부족 광고는 서빙 후보에서 제외하고 다음 후보를 선택
 - **Redis Atomic Spend**: Redis Lua script로 예산 확인과 차감을 하나의 작업처럼 처리
 - **Budget Fallback**: 모든 후보의 예산이 부족하면 `BUDGET_EXHAUSTED`로 응답
 - **Fixed Impression Cost**: 현재 검증 단계에서는 서빙 1회당 고정 노출 비용(10원)을 Redis 예산 차감에 사용
 
-#### 8. Performance Baseline (Step 8)
+### 8. Performance Baseline (Step 8)
 - **Load Test Scenario**: k6 기반으로 `fashion`, `local`, `home` 3개 지면 광고 서빙 부하 테스트 구성
 - **Candidate Cache**: 짧은 TTL의 후보 캐시로 반복 Elasticsearch 후보 조회 비용 감소
 - **Executor Reuse**: 요청마다 생성하던 executor를 Spring Bean으로 분리해 비동기 실행 오버헤드 감소
 - **Bottleneck Isolation**: Docker k6 네트워크 오류와 애플리케이션 내부 timeout을 분리해 관측
 - **Local Baseline**: 로컬 단일 인스턴스 기준 250 VU에서 광고 응답 성공률 99% 이상 확인
 
-#### 9. Observability Baseline (Step 9)
+### 9. Observability Baseline (Step 9)
 - **Prometheus Metrics**: `/actuator/prometheus`로 광고 서빙 요청 수, 응답 성공률, latency, fallback reason 노출
 - **Grafana Dashboard**: `Ad Serving Overview` 대시보드로 p95/p99, fallback reason, Redis/ES 상태 관측
 - **Exporter Integration**: Redis / Elasticsearch exporter를 통해 주요 의존 저장소 상태 수집
 - **Alert Rules**: p99 지연, 광고 응답률 저하, timeout 증가, target down 기준의 Prometheus alert rule 구성
 - **Metric Persistence**: Prometheus 데이터를 Docker volume에 저장해 컨테이너 재시작 이후에도 관측 데이터 유지
 
-#### 10. Traceability Baseline (Step 10)
+### 10. Traceability Baseline (Step 10)
 - **Trace ID Propagation**: `X-Trace-Id`를 요청/응답 경로에 포함해 요청 단위 추적 경로를 고정
 - **MDC Context Bridge**: 병렬 실행 구간에서도 동일 Trace ID를 유지하도록 MDC 컨텍스트 전달
 - **Fallback Correlation**: fallback reason과 Trace ID를 함께 기록해 장애와 데이터 미스 원인 추적 강화
 - **Regression Check**: 추적성 추가 이후 기존 서빙 시나리오(정상/timeout/fallback) 회귀 테스트 확인
 
-#### 11. K8s Deployment Readiness (Step 11)
+### 11. K8s Deployment Readiness (Step 11)
 - **K8s Manifests**: Deployment, Service, ConfigMap, Secret 기반 실행 구성 추가
 - **Health Probes**: readiness / liveness probe로 Pod 상태 점검 기준 구성
 - **Self-healing Check**: Pod 강제 종료 이후 재기동되는 흐름 확인
 - **Resource Boundary**: requests / limits를 명시해 HPA 판단을 위한 기본 리소스 기준 설정
 - **Scale-out Readiness**: 로컬 K8s에서 HPA manifest와 Prometheus scrape annotation을 준비하고, 자동 확장 가능 조건을 정리
 
-#### 12. Event Pipeline (Step 12)
+### 12. Event Pipeline (Step 12)
 - **Tracking URLs**: 광고 응답에 `requestId`, `impressionUrl`, `clickTrackingUrl`을 포함해 노출/클릭 수집 경로 추가
 - **Idempotency Guard**: Redis `SETNX`와 `eventId` 기준으로 중복 이벤트를 앞단에서 차단
 - **Async Event Ingestion**: Kafka topic(`ad-impressions`, `ad-clicks`)으로 이벤트 저장을 응답 경로에서 분리
 - **Click Redirect**: 클릭 이벤트 수집 후 광고주 landing URL로 redirect 처리
 - **Event Metrics**: impression / click / duplicate / failure rate를 Prometheus 지표로 노출
 
-#### 13. CTR Feedback Loop (Step 13)
+### 13. CTR Feedback Loop (Step 13)
 - **Real-time Ingestion**: Kafka Consumer 저장 직후 Redis 실시간 노출/클릭 카운팅 반영 (`ad:stat:imp:{adId}`, `ad:stat:clk:{adId}`)
 - **Warm-up & Preservation**: Redis 캐시 미스 시 DB(`ad_statistic`)에서 보완하며, 벌크 조회 시에도 Redis의 기존 부분 캐시 카운팅이 DB 값에 의해 유실 및 덮어쓰기 되지 않도록 보존 처리
 - **Smoothed CTR Calculation**: 극소 표본 편향 방지를 위해 스무딩 계산식 적용 `(clicks + alpha) / (impressions + beta)`
 - **CTR-weight Ranking**: `CtrWeightAdRanker`를 통해 `maxBid * smoothedCtr` 방식의 랭킹 선택 가능 설계 (기본 maxBid 전략과 다형성 스위칭 가능)
 - **Data Realign Batch**: Kafka DB 적재 후 Redis 카운팅 실패 엣지케이스를 확인하기 위해 새벽 3시 배치(`realignStatisticsFromEventLedger()`)로 이벤트 적재 기록 기반 통계 재집계 경로 마련
 
-#### 14. Budget Pacing & Operational Hardening (Step 14)
+### 14. Budget Pacing & Operational Hardening (Step 14)
 - **Budget Pacing**: 시간 대비 예산 소진 속도를 기준으로 과소진 광고의 노출을 확률적으로 제어
 - **DMP Circuit Breaker**: DMP 연속 실패 시 호출을 즉시 차단해 불필요한 대기 시간을 줄이는 fail-fast 구조 추가
 - **Stale Candidate Cache**: Elasticsearch 후보 캐시 갱신 지연 시 기존 캐시를 반환해 tail latency 확산을 완화
 - **Async Indexing Guard**: 광고 변경 이벤트를 payload snapshot으로 분리하고, ES 색인 성공 이후 Redis 예산 캐시 무효화
 - **Statistic Sync Hardening**: Redis 통계 동기화와 이벤트 적재 기록 기반 재집계 배치에서 반복 조회를 줄이고 벌크 조회/집계 기반으로 개선
 
-#### 15. Reliability Hardening (Step 15)
+### 15. Reliability Hardening (Step 15)
 - **Kafka DLQ**: 이벤트 Consumer 반복 실패 시 실패 payload를 `ad-events-dlq`로 격리해 후속 복구 출발점 마련
 - **ES Outbox-lite**: 비동기 Elasticsearch 색인 최종 실패 시 payload snapshot을 outbox에 저장하고 scheduler로 재처리
 - **Statistic Realign Chunking**: 이벤트 적재 기록 기반 통계 재집계 배치를 광고 ID 청크 단위로 나누어 메모리 부담 완화
 - **Circuit Breaker Jitter**: scale-out 환경에서 여러 Pod가 동시에 DMP 복구 요청을 보내는 상황을 줄이기 위해 backoff jitter 적용
 - **Reliability Smoke Test**: 50 VU 이벤트 포함 회귀 테스트로 서빙/이벤트 수집 흐름, DLQ 발생 여부, consumer lag 관측
 
-#### 16. Distributed Tracing (Step 16)
+### 16. Distributed Tracing (Step 16)
 - **OpenTelemetry / Jaeger**: 로컬 Jaeger로 광고 서빙 요청의 내부 처리 구간 trace 확인
 - **Serving Span 분리**: DMP 조회, 후보 조회, Elasticsearch 조회, 타겟 매칭, 랭킹, Redis 예산 차감 구간을 span으로 분리
 - **Kafka / Batch Trace**: 이벤트 발행/소비와 통계 동기화/재집계 배치 구간에도 trace 추가
 - **Observation Boundary**: Grafana는 이상 징후를 보고, Jaeger는 요청 내부 병목 구간을 따라가는 역할로 분리
 - **Smoke Verification**: 5 VU smoke 테스트와 Jaeger service/span 확인으로 tracing 추가 후 기본 서빙 흐름 검증
 
-#### 17. CDC / Debezium Deep Dive (Step 17)
+### 17. CDC / Debezium Deep Dive (Step 17)
 - **MySQL Binlog**: ROW 기반 binlog를 활성화해 테이블 변경 이벤트 수집 기반 구성
 - **Debezium / Kafka Connect**: `ad_search_outbox` 변경 이벤트를 Kafka topic으로 발행하는 로컬 CDC 경로 추가
 - **Scope Boundary**: 기존 Outbox-lite 복구 경로는 유지하고, CDC는 이벤트 스트림 확장 대안으로 분리
 - **CDC Verification**: connector와 task의 `RUNNING` 상태, CDC topic 생성 및 변경 이벤트 소비 확인
 
-#### 18. Slot Targeting Hardening (Step 18)
+### 18. Slot Targeting Hardening (Step 18)
 - **Hard Constraint Isolation**: 사용자 프로필 매칭(소프트 제약)과 광고 지면(Slot ID) 매칭(하드 제약)을 완전히 분리
 - **Two-tier Slot Defense**: Elasticsearch 1차 후보 조회(`slotIds IN [slotId, *]`)와 애플리케이션 `AdSlotMatcher` 2차 필터로 심층 방어
 - **Slot-safe Fallback**: DMP 장애, 타겟 불일치 등 모든 fallback 응답 경로에서도 반드시 요청된 지면 후보(`slotCandidates`) 안에서만 광고를 선택하도록 보장
@@ -154,10 +154,17 @@
 
 ---
 
-## Local Observability
+## Local Execution & Observability
 
 ```powershell
-docker compose up -d prometheus grafana redis-exporter elasticsearch-exporter jaeger
+# 1. 인프라 및 모니터링 기동
+docker compose up -d
+
+# 2. 애플리케이션 실행
+.\gradlew.bat bootRun
+
+# 3. 서빙 API 호출 검증
+curl "http://localhost:8080/api/v1/ads/serve?userId=user_1&slotId=fashion"
 ```
 
 - Prometheus: `http://localhost:9091`
