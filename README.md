@@ -126,6 +126,13 @@
 - **Scope Boundary**: 기존 Outbox-lite 복구 경로는 유지하고, CDC는 이벤트 스트림 확장 대안으로 분리
 - **CDC Verification**: connector와 task의 `RUNNING` 상태, CDC topic 생성 및 변경 이벤트 소비 확인
 
+#### 18. Slot Targeting Hardening (Step 18)
+- **Hard Constraint Isolation**: 사용자 프로필 매칭(소프트 제약)과 광고 지면(Slot ID) 매칭(하드 제약)을 완전히 분리
+- **Two-tier Slot Defense**: Elasticsearch 1차 후보 조회(`slotIds IN [slotId, *]`)와 애플리케이션 `AdSlotMatcher` 2차 필터로 심층 방어
+- **Slot-safe Fallback**: DMP 장애, 타겟 불일치 등 모든 fallback 응답 경로에서도 반드시 요청된 지면 후보(`slotCandidates`) 안에서만 광고를 선택하도록 보장
+- **Cache Partitioning**: 지면 간 캐시 오염을 방지하기 위해 인메모리 후보 캐시를 요청 지면(slotId)별로 분리 및 격리
+- **Legacy Compatibility**: 지면 데이터가 없는 기존 광고를 `*`(ALL_SLOTS)로 안전하게 호환 처리
+
 ---
 
 ## Key Features
@@ -135,6 +142,7 @@
 - **Failure Classification**: fallback reason으로 장애와 데이터 미스 구분
 - **Target Matching**: 성별, 지역, 관심사 기반 매칭을 후보 조회 이후 단계에서 수행
 - **Matching Boundary**: 후보 조회, 타겟 매칭, 최종 선택 책임을 분리해 이후 랭킹 기준 확장 가능
+- **Slot Targeting Boundary**: 광고 지면(Slot) 제약을 하드 계약으로 격리하여, 타겟팅 실패나 DMP 장애 fallback 상황에서도 타 지면 광고가 노출되는 현상을 완벽히 차단
 - **Budget Control**: Redis 기반 예산 차감으로 예산 부족 광고 서빙 방지
 - **Performance Baseline**: k6 부하 테스트와 병목 분리를 통해 로컬 단일 인스턴스 기준 성능 기준선 수립
 - **Observability**: Prometheus/Grafana 기반으로 latency, fallback, Redis/ES 상태를 지속 관측
@@ -173,13 +181,13 @@ Alert rule은 Prometheus의 `Alerts` 화면에서 확인할 수 있습니다.
 
 ## 기술 블로그 시리즈 (Design Rationale)
 
-- **Vol 1.** [#1. 서비스 분석 (Patterns)](https://velog.io/@hoonyl/1.-%EB%8B%B9%EA%B7%BC-%EB%AC%B4%EC%8B%A0%EC%82%AC-%EC%98%A4%EB%8A%98%EC%9D%98%EC%A7%91-%EA%B4%91%EA%B3%A0%EB%A5%BC-%EC%A7%81%EC%A0%91-%EB%B6%84%EC%84%9D%ED%95%98%EB%A9%B0-%EC%84%A4%EA%B3%84%EC%9D%98-%EA%B7%BC%EA%B1%B0%EB%A5%BC-%EC%B0%BE%EB%8B%A4)
+- **Vol 1.** [#1. 서비스 분석 (Patterns)](https://velog.io/@hoonyl/1.-%EB%8B%B9%EA%B7%BC-%EB%AC%B4%EC%8B%A0%EC%82%AC-%EC%98%A4%EC%9D%98%EC%A7%91-%EA%B4%91%EA%B3%A0%EB%A5%BC-%EC%A7%81%EC%A0%91-%EB%B6%84%EC%84%9D%ED%95%98%EB%A9%B0-%EC%84%A4%EA%B3%84%EC%9D%98-%EA%B7%BC%EA%B1%B0%EB%A5%BC-%EC%B0%BE%EB%8B%A4)
 - **Vol 2-1.** [#2-1. 데이터 모델링 (Data Modeling)](https://velog.io/@hoonyl/2-1.-%EA%B3%A0%EC%84%B1%EB%8A%A5-%EC%84%9C%EB%B9%94-%EC%9C%84%ED%95%9C-%EB%8D%B0%EC%9D%B4%ED%84%B0-%EB%AA%A8%EB%8D%B8%EB%A7%81)
 - **Vol 2-2.** [#2-2. 실행 구조 (Serving Structure)](https://velog.io/@hoonyl/2-2.-%EC%84%9C%EB%B9%99-%EC%86%8D%EB%8F%84%EB%A5%BC-%EB%81%8C%EC%96%B4%EC%98%AC%EB%A6%AC%EB%8A%94-%EC%8B%A4%ED%96%89-%EA%B5%AC%EC%A1%B0)
 - **Vol 3.** [#3. 최적화의 본질 (Optimization)](https://velog.io/@hoonyl/3.-%EA%B4%91%EA%B3%A0-%EC%97%94%EC%A7%84-%EC%B5%9C%EC%A0%81%ED%99%94%EC%9D%98-%EB%B3%B8%EC%A7%88)
 - **Vol 4.** [#4. MySQL과 Elasticsearch를 안전하게 동기화하기](https://velog.io/@hoonyl/4.-MySQL%EA%B3%BC-Elasticsearch%EB%A5%BC-%EC%95%88%EC%A0%84%ED%95%98%EA%B2%8C-%EB%8F%99%EA%B8%B0%ED%99%94%ED%95%98%EA%B8%B0)
 - **Vol 5.** [#5. 멈추지 않는 광고 서빙 흐름 만들기](https://velog.io/@hoonyl/5.-%EB%A9%88%EC%B6%94%EC%A7%80-%EC%95%8A%EB%8A%94-%EA%B4%91%EA%B3%A0-%EC%84%9C%EB%B9%99-%ED%9D%90%EB%A6%84-%EB%A7%8C%EB%93%A4%EA%B8%B0)
-- **Vol 6.** [#6. 광고 선택 로직을 나눈 이유](https://velog.io/@hoonyl/6.-%EA%B4%91%EA%B3%A0-%EC%84%A0%ED%83%9D-%EB%A1%9C%EC%A7%81%EC%9D%84-%EB%82%98%EB%88%88-%EC%9D%B4%EC%9C%A0)
+- **Vol 6.** [#6. 광고 선택 로직을 나눈 이유](https://velog.io/@hoonyl/6.-%EA%B4%91%EA%B3%A0-%EC%84%9C%ED%83%9D-%EB%A1%9C%EC%A7%81%EC%9D%84-%EB%82%98%EB%88%88-%EC%9D%B4%EC%9C%A0)
 - **Vol 7.** [#7. 예산이 없는 광고를 막는 흐름 만들기](https://velog.io/@hoonyl/7.-%EC%98%88%EC%82%B0%EC%9D%B4-%EC%97%86%EB%8A%94-%EA%B4%91%EA%B3%A0%EB%A5%BC-%EB%A7%89%EB%8A%94-%ED%9D%90%EB%A6%84-%EB%A7%8C%EB%93%A4%EA%B8%B0)
 - **Vol 8.** [#8. 부하 테스트에서 먼저 분리한 것](https://velog.io/@hoonyl/8.-%EB%B6%80%ED%95%98-%ED%85%8C%EC%8A%A4%ED%8A%B8%EC%97%90%EC%84%9C-%EB%A8%BC%EC%A0%80-%EB%B6%84%EB%A6%AC%ED%95%9C-%EA%B2%83)
 - **Vol 9.** [#9. 부하 테스트 지표를 계속 볼 수 있게 만들기](https://velog.io/@hoonyl/9.-%EB%B6%80%ED%95%98-%ED%85%8C%EC%8A%A4%ED%8A%B8-%EC%A7%80%ED%91%9C%EB%A5%BC-%EA%B3%84%EC%86%8D-%EB%B3%BC-%EC%88%98-%EC%9E%88%EA%B2%8C-%EB%A7%8C%EB%93%A4%EA%B8%B0)
@@ -191,6 +199,7 @@ Alert rule은 Prometheus의 `Alerts` 화면에서 확인할 수 있습니다.
 - **Vol 15.** [#15. 실패한 데이터를 그냥 잃지 않도록 만들기](https://velog.io/@hoonyl/15.-%EC%8B%A4%ED%8C%A8%ED%95%9C-%EB%8D%B0%EC%9D%B4%ED%84%B0%EB%A5%BC-%EA%B7%B8%EB%83%A5-%EC%9E%83%EC%A7%80-%EC%95%8A%EB%8F%84%EB%A1%9D-%EB%A7%8C%EB%93%A4%EA%B8%B0)
 - **Vol 16.** [#16. 지표에서 보인 문제를 요청 흐름으로 따라가기](https://velog.io/@hoonyl/16.-%EC%A7%80%ED%91%9C%EC%97%90%EC%84%9C-%EB%B3%B4%EC%9D%B8-%EB%AC%B8%EC%A0%9C%EB%A5%BC-%EC%9A%94%EC%B2%AD-%ED%9D%90%EB%A6%84%EC%9C%BC%EB%A1%9C-%EB%94%B0%EB%9D%BC%EA%B0%80%EA%B8%B0)
 - **Vol 17.** [#17. 변경 이벤트를 DB 밖으로 흘려보내는 방법 검토하기](https://velog.io/@hoonyl/17.-%EB%B3%80%EA%B2%BD-%EC%9D%B4%EB%B2%A4%ED%8A%B8%EB%A5%BC-DB-%EB%B0%96%EC%9C%BC%EB%A1%9C-%ED%9D%98%EB%A0%A4%EB%B3%B4%EB%82%B4%EB%8A%94-%EB%B0%A9%EB%B2%95-%EA%B2%80%ED%86%A0%ED%95%98%EA%B8%B0)
+- **Vol 18.** [#18. Elasticsearch를 넣고도 다른 지면 광고가 나갈 수 있었던 이유](https://velog.io/@hoonyl/18.-Elasticsearch%EB%A5%BC-%EB%84%A3%EA%B3%A0%EB%8F%84-%EB%8B%A4%EB%A5%B8-%EC%A7%80%EB%A9%B4-%EA%B4%91%EA%B3%A0%EA%B0%80-%EB%82%98%EA%B0%88-%EC%88%98-%EC%9E%88%EC%97%88%EB%8D%98-%EC%9D%B4%EC%9C%A0)
 
 ---
 
@@ -199,5 +208,6 @@ Alert rule은 Prometheus의 `Alerts` 화면에서 확인할 수 있습니다.
 - **Language/Framework**: Java 21, Spring Boot 3.4.0
 - **Database**: MySQL 8.0, Redis
 - **Search Engine**: Elasticsearch 8.15.0
+- **Message Broker & CDC**: Apache Kafka 3.8.0, Debezium (Kafka Connect 2.7.3)
 - **Communication**: gRPC (Protobuf 3)
 - **Tools**: Gradle, Docker Compose, Kubernetes
