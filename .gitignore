@@ -41,3 +41,6 @@ application-secret.yml
 # Markdown policy: Only README.md is allowed
 *.md
 !README.md
+
+# Personal Study Directory
+study/

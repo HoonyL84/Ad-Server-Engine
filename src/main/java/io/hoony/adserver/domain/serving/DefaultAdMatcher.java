@@ -4,6 +4,7 @@ import io.hoony.adserver.domain.ad.search.AdDocument;
 import io.hoony.adserver.domain.user.profile.UserProfile;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Component
@@ -11,11 +12,27 @@ public class DefaultAdMatcher implements AdMatcher {
 
     @Override
     public List<AdDocument> match(List<AdDocument> candidates, UserProfile profile) {
-        return candidates.stream()
-                .filter(ad -> genderMatches(ad.getTargetGender(), profile.gender()))
-                .filter(ad -> locationMatches(ad.getTargetLocationId(), profile.locationId()))
-                .filter(ad -> interestMatches(ad.getInterestTags(), profile.tags()))
-                .toList();
+        if (candidates == null || candidates.isEmpty() || profile == null) {
+            return List.of();
+        }
+
+        List<AdDocument> matchedAds = new ArrayList<>();
+        for (AdDocument ad : candidates) {
+            // 1단계: 성별 타게팅 검사
+            if (!genderMatches(ad.getTargetGender(), profile.gender())) {
+                continue;
+            }
+            // 2단계: 지역 타게팅 검사
+            if (!locationMatches(ad.getTargetLocationId(), profile.locationId())) {
+                continue;
+            }
+            // 3단계: 관심사 태그 교집합 검사
+            if (!interestMatches(ad.getInterestTags(), profile.tags())) {
+                continue;
+            }
+            matchedAds.add(ad);
+        }
+        return List.copyOf(matchedAds);
     }
 
     private boolean genderMatches(String adGender, String userGender) {
@@ -39,8 +56,16 @@ public class DefaultAdMatcher implements AdMatcher {
         if (userTags == null || userTags.isEmpty()) {
             return false;
         }
-        return adTags.stream()
-                .anyMatch(tag -> userTags.stream()
-                        .anyMatch(userTag -> userTag.equalsIgnoreCase(tag)));
+        for (String adTag : adTags) {
+            if (adTag == null) {
+                continue;
+            }
+            for (String userTag : userTags) {
+                if (adTag.equalsIgnoreCase(userTag)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 }
