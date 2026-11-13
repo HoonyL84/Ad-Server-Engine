@@ -13,6 +13,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -118,14 +119,74 @@ class AdStatisticServiceTest {
         assertThat(stats.get(2L).impressions()).isEqualTo(8000L); // DB에서 보완됨
         assertThat(stats.get(2L).clicks()).isEqualTo(30L);       // Redis 기존 값 보존
 
-        // Redis 누락된 대상만 set이 가야 함
-        verify(valueOperations, never()).set("ad:stat:imp:1", "10");
-        verify(valueOperations, never()).set("ad:stat:imp:1", "5000");
-        verify(valueOperations).set("ad:stat:clk:1", "150");
+        // Redis 누락된 대상만 단일 multiSet 배치로 채워야 하며 기존 키나 단건 set 호출은 없어야 함
+        verify(valueOperations, never()).set(anyString(), anyString());
+        verify(valueOperations, times(1)).multiSet(Map.of(
+                "ad:stat:clk:1", "150",
+                "ad:stat:imp:2", "8000"
+        ));
+    }
 
-        verify(valueOperations).set("ad:stat:imp:2", "8000");
-        verify(valueOperations, never()).set("ad:stat:clk:2", "30");
-        verify(valueOperations, never()).set("ad:stat:clk:2", "200");
+    @Test
+    @DisplayName("벌크 조회 시 여러 missingAdIds의 캐시 적재는 단건 set 루프 대신 단일 multiSet으로 처리된다")
+    void shouldBatchCacheFillWithSingleMultiSetOnMultipleCacheMisses() {
+        List<Long> adIds = List.of(1L, 2L, 3L);
+        when(valueOperations.multiGet(anyList())).thenReturn(java.util.Arrays.asList(
+                null, null,
+                null, null,
+                null, null
+        ));
+        when(adStatisticRepository.findAllById(adIds)).thenReturn(List.of(
+                AdStatistic.of(1L, 100L, 5L),
+                AdStatistic.of(2L, 200L, 10L)
+        ));
+
+        Map<Long, AdStatisticDto> stats = adStatisticService.getStatistics(adIds);
+
+        assertThat(stats.get(1L)).isEqualTo(new AdStatisticDto(100L, 5L));
+        assertThat(stats.get(2L)).isEqualTo(new AdStatisticDto(200L, 10L));
+        assertThat(stats.get(3L)).isEqualTo(new AdStatisticDto(0L, 0L));
+
+        verify(valueOperations, never()).set(anyString(), anyString());
+        verify(valueOperations, times(1)).multiSet(Map.of(
+                "ad:stat:imp:1", "100",
+                "ad:stat:clk:1", "5",
+                "ad:stat:imp:2", "200",
+                "ad:stat:clk:2", "10",
+                "ad:stat:imp:3", "0",
+                "ad:stat:clk:3", "0"
+        ));
+    }
+
+    @Test
+    @DisplayName("벌크 조회 시 adIds가 비어있거나 null이면 Redis와 DB를 호출하지 않는다")
+    void shouldNotCallRedisOrDatabaseWhenAdIdsEmptyOrNull() {
+        assertThat(adStatisticService.getStatistics(List.of())).isEmpty();
+        assertThat(adStatisticService.getStatistics(null)).isEmpty();
+
+        verifyNoInteractions(valueOperations);
+        verifyNoInteractions(adStatisticRepository);
+    }
+
+    @Test
+    @DisplayName("벌크 조회 시 모든 광고가 Redis 캐시에 적중하면 추가 Redis 쓰기와 DB 조회를 수행하지 않는다")
+    void shouldNotWriteToRedisWhenAllStatisticsHitCache() {
+        List<Long> adIds = List.of(1L, 2L);
+        when(valueOperations.multiGet(List.of(
+                "ad:stat:imp:1",
+                "ad:stat:clk:1",
+                "ad:stat:imp:2",
+                "ad:stat:clk:2"
+        ))).thenReturn(List.of("1000", "25", "2000", "50"));
+
+        Map<Long, AdStatisticDto> stats = adStatisticService.getStatistics(adIds);
+
+        assertThat(stats).containsEntry(1L, new AdStatisticDto(1000L, 25L));
+        assertThat(stats).containsEntry(2L, new AdStatisticDto(2000L, 50L));
+
+        verifyNoInteractions(adStatisticRepository);
+        verify(valueOperations, never()).set(anyString(), anyString());
+        verify(valueOperations, never()).multiSet(anyMap());
     }
 
     @Test

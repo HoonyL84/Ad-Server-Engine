@@ -91,6 +91,12 @@ protobuf {
 
 tasks.named('test') {
     useJUnitPlatform()
+    ['redis.benchmark.enabled', 'redis.host', 'redis.port'].each { prop ->
+        def val = System.getProperty(prop)
+        if (val != null) {
+            systemProperty prop, val
+        }
+    }
     testLogging {
         events "passed", "skipped", "failed"
     }

@@ -133,6 +133,16 @@
 - **Cache Partitioning**: 지면 간 캐시 오염을 방지하기 위해 인메모리 후보 캐시를 요청 지면(slotId)별로 분리 및 격리
 - **Legacy Compatibility**: 지면 데이터가 없는 기존 광고를 `*`(ALL_SLOTS)로 안전하게 호환 처리
 
+### 21. Redis Pipeline Batch Tuning (Step 21)
+- **Cache-Miss Write Batching**: `AdStatisticService.getStatistics`에서 `missingAdIds` 캐시 적재 시 건별 `opsForValue().set` 루프(최대 `2N` RTT)를 제거하고, 누락된 키만 수집해 단일 `multiSet`(1 RTT)으로 적재하도록 개선 (`impVal != null` 등 기존 Redis 부분 카운터 보존 불변식 유지)
+- **`multiGet`/`multiSet` vs `executePipelined` 실측 및 조건부 보류 근거**:
+  - **로컬 Docker Redis 실측 결과 (`RedisPipelineBenchmarkTest`)**:
+    - 200 광고(400키, 20회 평균) 쓰기: `singleSet` 164.87ms → **`multiSet` 1.47ms (~112x 단축)** / `executePipelined` 13.64ms; 읽기: `singleGet` 147.13ms → **`multiGet` 1.45ms (~101x 단축)** / `executePipelined` 7.02ms
+    - 1,000 광고(2,000키, 5회 평균) 쓰기: `singleSet` 772.92ms → **`multiSet` 4.28ms (~181x 단축)** / `executePipelined` 26.70ms; 읽기: `singleGet` 739.31ms → **`multiGet` 3.50ms (~211x 단축)** / `executePipelined` 21.30ms
+  - **현재 적용(`multiGet` / `multiSet`)**: 단일 Redis 인스턴스 환경에서 `ad:stat:*` 키에 개별 TTL이 없고, 서빙 L1 후보 상한(최대 200건 = 400키)에서 `MGET`/`MSET`이 단일 명령 프레임 처리로 `executePipelined`보다도 5~9배 빠르며 `RedisCallback`/`byte[]` 직렬화 복잡도 없이 일관된 추적(`ad.redis.stat.multiget`, `ad.redis.stat.multiset`)을 유지
+  - **Pipelining(`executePipelined`) 부분 보류 기준**: 키별 TTL(`SETEX`) 적용, 이종 명령 혼합 배치, 또는 Redis Cluster 환경의 다중 해시 슬롯(`CROSSSLOT` 회피) 및 `UserDataSeeder`(10만 건 초기 적재)급 초대량 쓰기가 필요한 시점에 도입하도록 기준 명시
+- **Benchmark Verification**: `RedisPipelineBenchmarkTest`로 200건 캐시 미스 시 `multiGet(1) + multiSet(1)` RTT 구조와 모의 RTT 기반 처리량을 unit 레벨에서 검증하고, 로컬 Redis 대상 실측 비교는 `-Dredis.benchmark.enabled=true`로 재현 가능하도록 분리
+
 ---
 
 ## Key Features
