@@ -77,6 +77,12 @@ ad-server:
       failure-threshold: 5
       backoff-window-ms: 10000
       backoff-jitter-ms: 2000
+  openrtb:
+    sla-timeout-ms: 15
+    dmp-timeout-ms: 8
+    ranking-strategy: max-bid
+    seat-id: ad-server-engine
+    default-currency: KRW
   dmp:
     provider: grpc
     grpc:

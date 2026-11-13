@@ -133,6 +133,17 @@
 - **Cache Partitioning**: 지면 간 캐시 오염을 방지하기 위해 인메모리 후보 캐시를 요청 지면(slotId)별로 분리 및 격리
 - **Legacy Compatibility**: 지면 데이터가 없는 기존 광고를 `*`(ALL_SLOTS)로 안전하게 호환 처리
 
+### 18-B. OpenRTB Bidder Prototype (Step 18-B)
+- **OpenRTB 2.x Minimal DTO & Validation**: `BidRequest`, `Imp`, `BidResponse`, `SeatBid`, `Bid` 최소 규격 및 `imp.bidfloor >= 0` / 필수 필드 검증 구현
+- **15ms SLA Critical Path**: `POST /api/v1/openrtb/bid`에서 `min(15ms, request.tmax)` 경계 내 병렬 조회(후보/DMP), `AdSlotMatcher` 지면+`bidfloor` 가드, `MaxBidAdRanker`, `AdBudgetService` 차감 순으로 처리하고 미충족 시 `204 No Content`(No-Bid) 반환
+- **Serving vs DSP Bidder 경계**:
+  - `AdServingService` (`/api/v1/ads/serve`): 1st-party 직접 서빙 경로(30ms/50ms timeout). DMP 지연·타겟 미매칭 시에도 `slotCandidates` 기반 broad fallback(`200 OK`)으로 노출률(fill) 우선
+  - `OpenRtbBidderService` (`/api/v1/openrtb/bid`): DSP 입찰 경로(15ms hard SLA). DMP timeout·슬롯 미매칭·`bidfloor` 미달·예산 소진 시 fail-closed `204 No-Bid` 반환하며, 타이트한 15ms 타임아웃이 `AdServingService`의 30ms 서킷 브레이커를 오염시키지 않도록 격리
+- **Event Flow (`win` / `loss` / `impression` / `click`)**:
+  - `win(nurl)`: `GET /api/v1/openrtb/win` — SSP 낙찰 알림 및 `openrtb.notice.events{type="win"}` 메트릭 기록 (`price=${AUCTION_PRICE}`)
+  - `loss(lurl)`: `GET /api/v1/openrtb/loss` — SSP 패찰 알림 및 `openrtb.notice.events{type="loss"}` 메트릭 기록 (`reason=${AUCTION_LOSS}`)
+  - `impression` / `click`: `Bid.adm` 마크업에 포함된 `impressionUrl` / `clickTrackingUrl`을 기존 Step 12 엔드포인트(`/api/v1/ad-events/impressions`, `/api/v1/ad-events/clicks`)로 연결해 Redis 중복 방지 및 Kafka 파이프라인 재사용
+
 ### 21. Redis Pipeline Batch Tuning (Step 21)
 - **Cache-Miss Write Batching**: `AdStatisticService.getStatistics`에서 `missingAdIds` 캐시 적재 시 건별 `opsForValue().set` 루프(최대 `2N` RTT)를 제거하고, 누락된 키만 수집해 단일 `multiSet`(1 RTT)으로 적재하도록 개선 (`impVal != null` 등 기존 Redis 부분 카운터 보존 불변식 유지)
 - **`multiGet`/`multiSet` vs `executePipelined` 실측 및 조건부 보류 근거**:
