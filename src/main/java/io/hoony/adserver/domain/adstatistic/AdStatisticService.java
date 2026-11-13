@@ -67,24 +67,21 @@ public class AdStatisticService {
             return Map.of();
         }
 
-        List<String> keys = new ArrayList<>();
-        for (Long adId : adIds) {
-            keys.add("ad:stat:imp:" + adId);
-            keys.add("ad:stat:clk:" + adId);
-        }
-
+        List<String> keys = buildStatKeys(adIds);
         List<String> values = tracingSupport.observe("ad.redis.stat.multiget", () ->
                 redisTemplate.opsForValue().multiGet(keys));
-        Map<Long, AdStatisticDto> result = new java.util.HashMap<>();
+        Map<Long, AdStatisticDto> result = new HashMap<>();
         List<Long> missingAdIds = new ArrayList<>();
+        List<Integer> missingIndices = new ArrayList<>();
 
         for (int i = 0; i < adIds.size(); i++) {
             Long adId = adIds.get(i);
-            String impVal = values != null ? values.get(2 * i) : null;
-            String clkVal = values != null ? values.get(2 * i + 1) : null;
+            String impVal = valueAt(values, 2 * i);
+            String clkVal = valueAt(values, 2 * i + 1);
 
             if (impVal == null || clkVal == null) {
                 missingAdIds.add(adId);
+                missingIndices.add(i);
             } else {
                 result.put(adId, new AdStatisticDto(
                         parseLongOrDefault(impVal, 0L),
@@ -96,10 +93,12 @@ public class AdStatisticService {
         if (!missingAdIds.isEmpty()) {
             Map<Long, AdStatistic> dbStats = adStatisticRepository.findAllById(missingAdIds).stream()
                     .collect(Collectors.toMap(AdStatistic::getAdId, Function.identity()));
-            for (Long adId : missingAdIds) {
-                int idx = adIds.indexOf(adId);
-                String impVal = values != null ? values.get(2 * idx) : null;
-                String clkVal = values != null ? values.get(2 * idx + 1) : null;
+            Map<String, String> missingUpdates = new HashMap<>();
+
+            for (int idx : missingIndices) {
+                Long adId = adIds.get(idx);
+                String impVal = valueAt(values, 2 * idx);
+                String clkVal = valueAt(values, 2 * idx + 1);
 
                 AdStatistic dbStat = dbStats.get(adId);
                 long imp = impVal != null
@@ -111,12 +110,18 @@ public class AdStatisticService {
 
                 result.put(adId, new AdStatisticDto(imp, clk));
 
+                // 기존 Redis 카운터가 있는 키는 덮어쓰지 않고, 누락된 키만 단일 multiSet 배치로 적재한다.
                 if (impVal == null) {
-                    redisTemplate.opsForValue().set("ad:stat:imp:" + adId, String.valueOf(imp));
+                    missingUpdates.put(impKey(adId), String.valueOf(imp));
                 }
                 if (clkVal == null) {
-                    redisTemplate.opsForValue().set("ad:stat:clk:" + adId, String.valueOf(clk));
+                    missingUpdates.put(clkKey(adId), String.valueOf(clk));
                 }
+            }
+
+            if (!missingUpdates.isEmpty()) {
+                tracingSupport.observe("ad.redis.stat.multiset", () ->
+                        redisTemplate.opsForValue().multiSet(missingUpdates));
             }
         }
 
@@ -226,11 +231,7 @@ public class AdStatisticService {
     }
 
     private Map<Long, AdStatisticDto> getRedisStatistics(List<Long> adIds) {
-        List<String> keys = new ArrayList<>();
-        for (Long adId : adIds) {
-            keys.add("ad:stat:imp:" + adId);
-            keys.add("ad:stat:clk:" + adId);
-        }
+        List<String> keys = buildStatKeys(adIds);
 
         List<String> values = tracingSupport.observe("ad.redis.stat.multiget", () ->
                 redisTemplate.opsForValue().multiGet(keys));
@@ -240,8 +241,8 @@ public class AdStatisticService {
 
         Map<Long, AdStatisticDto> result = new HashMap<>();
         for (int i = 0; i < adIds.size(); i++) {
-            String impVal = values.get(2 * i);
-            String clkVal = values.get(2 * i + 1);
+            String impVal = valueAt(values, 2 * i);
+            String clkVal = valueAt(values, 2 * i + 1);
             if (impVal == null && clkVal == null) {
                 continue;
             }
@@ -251,5 +252,29 @@ public class AdStatisticService {
             result.put(adIds.get(i), new AdStatisticDto(impressions, clicks));
         }
         return result;
+    }
+
+    private List<String> buildStatKeys(List<Long> adIds) {
+        List<String> keys = new ArrayList<>(adIds.size() * 2);
+        for (Long adId : adIds) {
+            keys.add(impKey(adId));
+            keys.add(clkKey(adId));
+        }
+        return keys;
+    }
+
+    private String impKey(Long adId) {
+        return "ad:stat:imp:" + adId;
+    }
+
+    private String clkKey(Long adId) {
+        return "ad:stat:clk:" + adId;
+    }
+
+    private String valueAt(List<String> values, int index) {
+        if (values == null || index < 0 || index >= values.size()) {
+            return null;
+        }
+        return values.get(index);
     }
 }
