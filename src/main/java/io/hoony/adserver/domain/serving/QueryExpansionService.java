@@ -2,6 +2,7 @@ package io.hoony.adserver.domain.serving;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -32,7 +33,10 @@ public class QueryExpansionService {
     private final Set<String> inFlightQueries = ConcurrentHashMap.newKeySet();
 
     @Autowired
-    public QueryExpansionService(StringRedisTemplate redisTemplate, Executor executorService) {
+    public QueryExpansionService(
+            StringRedisTemplate redisTemplate,
+            @Qualifier("taskExecutor") Executor executorService
+    ) {
         this(redisTemplate, query -> List.of(query), executorService);
     }
 
